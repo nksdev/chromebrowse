@@ -115,3 +115,84 @@ def test_browser_fetch_passes_markdown_option_and_closes_page(monkeypatch):
     }
     assert page.extract_kwargs == result
     assert page.closed is True
+
+
+
+def test_element_interaction_error_is_not_reported_as_missing(monkeypatch):
+    from chromebrowse.browser import Element
+    from chromebrowse.exceptions import ElementInteractionError
+
+    class BrokenLocator:
+        def nth(self, index):
+            return self
+
+        def click(self, **kwargs):
+            raise RuntimeError("overlay intercepts click")
+
+    class FakePage:
+        def locator(self, selector):
+            return BrokenLocator()
+
+    element = Element.__new__(Element)
+    element._page = type("Owner", (), {"_pw_page": FakePage(), "_timeout": 30000})()
+    element._selector = "#submit"
+    element._index = 0
+
+    monkeypatch.setattr(Element, "_exists", lambda self: True)
+    with pytest.raises(ElementInteractionError, match="overlay"):
+        element.click()
+
+
+def test_element_click_and_fill_preserve_zero_timeout(monkeypatch):
+    from chromebrowse.browser import Element
+
+    seen = []
+
+    class Locator:
+        def nth(self, index):
+            return self
+
+        def click(self, **kwargs):
+            seen.append(("click", kwargs["timeout"]))
+
+        def fill(self, value, **kwargs):
+            seen.append(("fill", kwargs["timeout"]))
+
+    class FakePage:
+        def locator(self, selector):
+            return Locator()
+
+    owner = type("Owner", (), {"_pw_page": FakePage(), "_timeout": 30000})()
+    element = Element.__new__(Element)
+    element._page = owner
+    element._selector = "#field"
+    element._index = 0
+
+    monkeypatch.setattr(Element, "_exists", lambda self: True)
+    element.click(timeout=0)
+    element.fill("x", timeout=0)
+
+    assert seen == [("click", 0), ("fill", 0)]
+
+
+def test_wait_methods_preserve_zero_timeout():
+    from chromebrowse.browser import Page
+
+    class FakePage:
+        def __init__(self):
+            self.timeouts = []
+
+        def wait_for_selector(self, selector, **kwargs):
+            self.timeouts.append(kwargs["timeout"])
+
+        def wait_for_load_state(self, state, **kwargs):
+            self.timeouts.append(kwargs["timeout"])
+
+    browser = Browser()
+    fake = FakePage()
+    page = Page(browser, fake)
+
+    page.wait_for("#ready", timeout=0)
+    page.wait_for_load("load", timeout=0)
+
+    assert fake.timeouts == [0, 0]
