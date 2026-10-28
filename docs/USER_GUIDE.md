@@ -33,7 +33,7 @@ It is a convenience layer over Playwright, not a replacement for the browser eng
 
 ## What it does not do
 
-`chromebrowse` does not automatically provide a full web crawler, search engine, CAPTCHA solver, anti-bot bypass, proxy service, task scheduler, data warehouse, or an AI agent. Your application must define which sites to visit, what information to collect, and how to store or use results.
+`chromebrowse` includes an optional sequential, browser-rendered crawler, but it is not a search engine, CAPTCHA solver, anti-bot bypass, proxy service, task scheduler, data warehouse, or an AI agent. Your application must define which sites to visit, what information to collect, and how to store or use results.
 
 It does not guarantee that a website permits automated access or that every site will render identically. Login flows, bot checks, network failures, and site changes may require application-specific handling.
 

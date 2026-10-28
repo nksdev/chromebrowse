@@ -56,11 +56,8 @@ def test_save_restricts_permissions(tmp_path):
         pytest.skip("POSIX permissions")
     session = Session("t", state_dir=tmp_path)
     session._browser = MagicMock()
+    session._browser.context.storage_state.return_value = {"cookies": [], "origins": []}
 
-    def write_state(path):
-        Path(path).write_text("{}")
-
-    session._browser.context.storage_state.side_effect = write_state
     session.save()
 
     assert stat.S_IMODE(session.state_path.stat().st_mode) == 0o600
