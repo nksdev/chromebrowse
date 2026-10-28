@@ -177,8 +177,7 @@ from chromebrowse import Browser
 with Browser() as b:
     page = b.open("https://news.ycombinator.com", wait_until="networkidle")
 
-    for item in page.find_all(".titleline")[:10]:
-        link = item.find("a")
+    for link in page.find_all(".titleline a")[:10]:
         print(link.text(), "->", link.attr("href"))
 ```
 
@@ -206,11 +205,15 @@ app = FastAPI(lifespan=lifespan)
 
 @app.get("/read")
 def read(url: str):
+    page = None
     try:
         page = browser.open(url, wait_until="domcontentloaded")
         return {"title": page.title, "text": page.text()[:5000]}
     except BrowserError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    finally:
+        if page is not None:
+            page.close()
 ```
 
 ### Example 3 - Turn a workflow into a command-line tool
@@ -314,7 +317,7 @@ the browser even if your code raises.
 page.goto("https://example.com", wait_until="networkidle")
 
 page.title          # <title> text
-page.current_url    # final URL after redirects
+page.current_url()  # final URL after redirects
 page.status         # HTTP status code
 
 page.text()         # clean, readable text
@@ -465,7 +468,7 @@ cb> quit
 ```python
 page.goto(url, wait_until="domcontentloaded")
 page.wait_for(".results")      # wait for a selector
-page.wait_for("networkidle")   # or wait for network silence
+page.wait_for_load("networkidle")  # or wait for network silence
 ```
 
 **Save a page as Markdown**

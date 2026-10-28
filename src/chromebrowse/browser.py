@@ -323,10 +323,13 @@ class Page:
         return str(path)
 
     def close(self) -> None:
+        """Close this tab and release its wrapper from the owning browser."""
         try:
             self._pw_page.close()
         except Exception:
             pass
+        finally:
+            self._browser._forget_page(self)
 
     def __enter__(self) -> "Page":
         return self
@@ -464,6 +467,14 @@ class Browser:
         self._pw = None
         self._started = False
 
+    def _forget_page(self, page: Page) -> None:
+        """Remove a closed page wrapper from the browser's registry."""
+        try:
+            self._pages.remove(page)
+        except ValueError:
+            # Closing a page more than once is safe.
+            pass
+
     def close(self) -> None:
         for p in list(self._pages):
             p.close()
@@ -504,8 +515,18 @@ class Browser:
     ) -> Page:
         if not self._started:
             self.start()
-        page = page or self.new_page()
-        return self._navigate(page, url, wait_until=wait_until, timeout=timeout)
+        created_page = page is None
+        target_page = page if page is not None else self.new_page()
+        try:
+            return self._navigate(
+                target_page, url, wait_until=wait_until, timeout=timeout
+            )
+        except Exception:
+            # One-shot calls create their own page. Do not leak it when
+            # navigation fails, but preserve caller-owned pages for recovery.
+            if created_page:
+                target_page.close()
+            raise
 
     navigate = open
 

@@ -7,7 +7,7 @@ Quick start::
     with Browser() as browser:
         page = browser.open("https://example.com")
         print(page.title)
-        print(page.text[:200])
+        print(page.text()[:200])
         page.screenshot("example.png")
 """
 
