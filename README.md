@@ -359,7 +359,7 @@ page.click("button.submit")
 page.fill("input[name=q]", "python")
 page.press("Enter")
 page.wait_for("#results")
-page.evaluate("document.querySelectorAll(1).length")
+page.evaluate("document.querySelectorAll('p').length")
 page.scroll_to_bottom()
 
 page.snapshot("page.png", full_page=True)
