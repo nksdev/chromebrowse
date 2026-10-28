@@ -405,23 +405,18 @@ class Browser:
                 self._context = self._browser.new_context(**self.config.context_kwargs())
             self._context.set_default_timeout(self.config.default_timeout)
             self._context.set_default_navigation_timeout(self.config.navigation_timeout)
-            if self.config.public_only:
+            if self.config.public_only or self.config.block_images or self.config.block_resources:
                 blocked = set(self.config.block_resources)
                 self._context.route(
                     "**/*",
                     lambda route, req: _request_router(
                         route,
                         req,
-                        public_only=True,
+                        public_only=self.config.public_only,
                         block_images=self.config.block_images,
                         blocked_types=blocked,
                     ),
                 )
-            elif self.config.block_images:
-                self._context.route("**/*", _block_images_router)
-            elif self.config.block_resources:
-                blocked = set(self.config.block_resources)
-                self._context.route("**/*", lambda route, req: _block_types_router(route, req, blocked))
         except Exception as exc:
             self._safe_stop()
             raise BrowserLaunchError(f"failed to launch Chromium: {exc}") from exc
