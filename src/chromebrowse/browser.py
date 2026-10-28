@@ -553,10 +553,15 @@ class Browser:
         timeout: Optional[float] = None,
         include_html: bool = False,
         include_links: bool = False,
+        include_markdown: bool = False,
     ) -> PageContent:
         page = self.open(url, wait_until=wait_until, timeout=timeout)
         try:
-            return page.extract(include_html=include_html, include_links=include_links)
+            return page.extract(
+                include_html=include_html,
+                include_links=include_links,
+                include_markdown=include_markdown,
+            )
         finally:
             page.close()
 
