@@ -107,7 +107,7 @@ class _TextExtractor(HTMLParser):
     def handle_data(self, data):
         if self._skip_depth:
             return
-        text = re.sub(r"\\s+", " ", data).strip()
+        text = re.sub(r"\s+", " ", data).strip()
         if text:
             self.parts.append(text)
             self.parts.append(" ")
