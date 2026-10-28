@@ -205,11 +205,15 @@ app = FastAPI(lifespan=lifespan)
 
 @app.get("/read")
 def read(url: str):
+    page = None
     try:
         page = browser.open(url, wait_until="domcontentloaded")
         return {"title": page.title, "text": page.text()[:5000]}
     except BrowserError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    finally:
+        if page is not None:
+            page.close()
 ```
 
 ### Example 3 - Turn a workflow into a command-line tool
