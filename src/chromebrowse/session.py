@@ -81,6 +81,7 @@ class Session:
         self.persist = persist
         self._browser: Optional[Browser] = None
         self._page: Optional[Page] = None
+        self._skip_save_on_close = False
 
     # ------------------------------------------------------------ properties
     @property
@@ -207,33 +208,53 @@ class Session:
             except OSError:
                 pass
             raise
+        self._skip_save_on_close = False
         return str(self.state_path)
 
     def clear(self) -> None:
-        """Delete persisted state and clear in-memory cookies."""
+        """Delete persisted state and clear cookies and web storage in open tabs."""
         if self.state_path.is_file():
             self.state_path.unlink()
+        self._skip_save_on_close = True
         if self._browser is not None:
             try:
                 self._browser.context.clear_cookies()
             except Exception:
                 pass
+            try:
+                for page in self._browser.context.pages:
+                    try:
+                        page.evaluate(
+                            "() => { try { localStorage.clear(); } catch (_) {} "
+                            "try { sessionStorage.clear(); } catch (_) {} }"
+                        )
+                    except Exception:
+                        pass
+            except Exception:
+                pass
 
     def close(self) -> None:
         if self._browser is not None:
-            if self.persist:
+            if self.persist and not self._skip_save_on_close:
                 try:
                     self.save()
-                except Exception:
-                    pass
+                except Exception as exc:
+                    import warnings
+                    warnings.warn(
+                        f"failed to persist session {self.name!r}: {exc}",
+                        RuntimeWarning,
+                        stacklevel=2,
+                    )
             self._browser.close()
         self._browser = None
         self._page = None
+        self._skip_save_on_close = False
 
     # ----------------------------------------------------------- convenience
     def open(self, url: str, **kwargs: Any) -> Page:
         self.start()
         self._page = self.browser.open(url, page=self._page, **kwargs)
+        self._skip_save_on_close = False
         return self._page
 
     def fetch(self, url: str, **kwargs: Any):
