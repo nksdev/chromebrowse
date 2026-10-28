@@ -130,7 +130,8 @@ def cmd_fetch(args: argparse.Namespace) -> int:
     else:
         if args.title:
             print(content.title)
-        print(content.text[: args.max_chars] if args.max_chars else content.text)
+        output = content.markdown if args.markdown else content.text
+        print(output[: args.max_chars] if args.max_chars else output)
     return 0
 
 
