@@ -60,3 +60,69 @@ def test_session_actions_parse():
 def test_wait_until_choices():
     args = build_parser().parse_args(["text", "https://x.test", "--wait-until", "networkidle"])
     assert args.wait_until == "networkidle"
+
+
+
+def test_session_show_reads_persisted_cookies_without_starting_browser(tmp_path, monkeypatch, capsys):
+    import json
+    from chromebrowse.session import Session
+
+    state_dir = tmp_path / "sessions"
+    state_dir.mkdir()
+    state = {
+        "cookies": [
+            {"name": "sid", "value": "abc123", "domain": "example.com"}
+        ],
+        "origins": [],
+    }
+    (state_dir / "work.json").write_text(json.dumps(state), encoding="utf-8")
+
+    def fail_start(self):
+        raise AssertionError("session show must not launch a browser")
+
+    monkeypatch.setattr(Session, "start", fail_start)
+    result = main(["session", "show", "work", "--state-dir", str(state_dir)])
+    assert result == 0
+    output = capsys.readouterr().out
+    assert "1 cookie(s)" in output
+    assert "sid=abc123" in output
+
+
+def test_session_show_json_reads_persisted_cookies(tmp_path, capsys):
+    import json
+
+    state_dir = tmp_path / "sessions"
+    state_dir.mkdir()
+    cookies = [{"name": "sid", "value": "abc123", "domain": "example.com"}]
+    (state_dir / "work.json").write_text(
+        json.dumps({"cookies": cookies, "origins": []}), encoding="utf-8"
+    )
+
+    result = main(["session", "show", "work", "--state-dir", str(state_dir), "--json"])
+    assert result == 0
+    import json as json_module
+    assert json_module.loads(capsys.readouterr().out) == cookies
+
+
+def test_session_show_missing_state_returns_error(tmp_path, capsys):
+    result = main(["session", "show", "missing", "--state-dir", str(tmp_path)])
+    assert result == 1
+    assert "not found" in capsys.readouterr().err
+
+
+def test_session_clear_deletes_state_without_launching_browser(tmp_path, monkeypatch, capsys):
+    from chromebrowse.session import Session
+
+    state_dir = tmp_path / "sessions"
+    state_dir.mkdir()
+    state_file = state_dir / "work.json"
+    state_file.write_text('{"cookies": [], "origins": []}', encoding="utf-8")
+
+    def fail_start(self):
+        raise AssertionError("session clear must not launch a browser")
+
+    monkeypatch.setattr(Session, "start", fail_start)
+    result = main(["session", "clear", "work", "--state-dir", str(state_dir)])
+    assert result == 0
+    assert not state_file.exists()
+    assert "cleared" in capsys.readouterr().out
