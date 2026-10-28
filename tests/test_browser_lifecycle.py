@@ -80,3 +80,38 @@ def test_open_preserves_caller_owned_page_when_navigation_fails(monkeypatch):
 def _register(browser, page):
     browser._pages.append(page)
     return page
+
+
+
+def test_browser_fetch_passes_markdown_option_and_closes_page(monkeypatch):
+    browser = Browser()
+
+    class FakePage:
+        def __init__(self):
+            self.extract_kwargs = None
+            self.closed = False
+
+        def extract(self, **kwargs):
+            self.extract_kwargs = kwargs
+            return kwargs
+
+        def close(self):
+            self.closed = True
+
+    page = FakePage()
+    monkeypatch.setattr(browser, "open", lambda *args, **kwargs: page)
+
+    result = browser.fetch(
+        "https://example.com",
+        include_html=True,
+        include_links=True,
+        include_markdown=True,
+    )
+
+    assert result == {
+        "include_html": True,
+        "include_links": True,
+        "include_markdown": True,
+    }
+    assert page.extract_kwargs == result
+    assert page.closed is True
