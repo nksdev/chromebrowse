@@ -1,6 +1,7 @@
 """Tests for session state helpers (filesystem only, no browser)."""
 
 import json
+import pytest
 from pathlib import Path
 
 from chromebrowse.session import delete_session, list_sessions
