@@ -115,8 +115,9 @@ class Session:
                 # browser and preserve the invalid file for diagnosis/recovery.
                 try:
                     self._browser.close()
-                finally:
-                    self._browser = None
+                except Exception:
+                    pass
+                self._browser = None
                 raise
         return self
 
