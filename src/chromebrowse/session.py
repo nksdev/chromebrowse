@@ -80,6 +80,33 @@ def _local_storage_seed_script(origin: str, items: List[Dict[str, Any]]) -> str:
     )
 
 
+def restore_origins(context: Any, origins: List[Dict[str, Any]]) -> None:
+    """Seed per-origin ``localStorage`` on a Playwright browser context.
+
+    Playwright's ``storage_state`` records ``localStorage`` entries per
+    origin. Replaying them via ``add_init_script`` installs the values before
+    page scripts run, which is required for token-in-localStorage auth flows.
+    Each script is guarded on ``location.origin`` so one origin's data cannot
+    leak into another.
+
+    Raises:
+        SessionError: if a seed script cannot be installed.
+    """
+    for origin in origins or []:
+        if not isinstance(origin, dict):
+            continue
+        origin_url = origin.get("origin")
+        items = origin.get("localStorage") or []
+        if not origin_url or not items:
+            continue
+        try:
+            context.add_init_script(script=_local_storage_seed_script(origin_url, items))
+        except Exception as exc:
+            raise SessionError(
+                f"cannot restore localStorage for {origin_url}: {exc}"
+            ) from exc
+
+
 class Session:
     """A named, persistable browsing session.
 
@@ -168,20 +195,7 @@ class Session:
             except Exception as exc:
                 raise SessionError(f"cannot apply cookies: {exc}") from exc
 
-        for origin in data.get("origins") or []:
-            origin_url = origin.get("origin")
-            items = origin.get("localStorage") or []
-            if not origin_url or not items:
-                continue
-            try:
-                # Seed localStorage before the page's own scripts run.
-                self._browser.context.add_init_script(
-                    script=_local_storage_seed_script(origin_url, items)
-                )
-            except Exception as exc:
-                raise SessionError(
-                    f"cannot restore localStorage for {origin_url}: {exc}"
-                ) from exc
+        restore_origins(self._browser.context, data.get("origins") or [])
 
     def save(self) -> str:
         """Persist cookies + localStorage to the session state file.

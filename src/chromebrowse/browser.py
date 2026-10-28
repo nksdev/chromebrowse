@@ -327,7 +327,15 @@ class Page:
         self._browser._context.storage_state(path=str(path))
         return str(path)
 
+    def is_closed(self) -> bool:
+        """True when the underlying Playwright page is closed or unusable."""
+        try:
+            return self._pw_page.is_closed()
+        except Exception:
+            return True
+
     def close(self) -> None:
+        """Close the page. Safe to call repeatedly and after browser shutdown."""
         try:
             self._pw_page.close()
         except Exception:
@@ -495,6 +503,9 @@ class Browser:
         if not self._started:
             self.start()
         assert self._context is not None
+        # Prune pages whose underlying Playwright page is already closed so a
+        # long-running browser does not accumulate dead wrappers.
+        self._pages = [p for p in self._pages if not p.is_closed()]
         pw_page = self._context.new_page()
         page = Page(self, pw_page)
         self._pages.append(page)
@@ -515,6 +526,7 @@ class Browser:
     navigate = open
 
     def _navigate(self, page: Page, url: str, wait_until: LoadState = "load", timeout: Optional[float] = None) -> Page:
+        start = time.time()
         if not url.startswith(("http://", "https://", "file://", "about:", "data:")):
             if url.startswith("//"):
                 url = "https:" + url
@@ -567,19 +579,40 @@ class Browser:
         return str(path)
 
     def load_state(self, path: Union[str, Path]) -> None:
+        """Restore a Playwright storage state: cookies *and* localStorage.
+
+        Playwright storage state is a superset of cookies: it also carries
+        per-origin ``localStorage`` snapshots that many modern sites use for
+        auth tokens. Restoring only cookies silently logs those sessions out,
+        so both sections are applied here (shared with ``Session``).
+        """
         if not self._started:
             self.start()
         state_path = Path(path)
         if not state_path.is_file():
             raise SessionError(f"storage state not found: {state_path}")
-        cookies = []
         try:
             data = json.loads(state_path.read_text("utf-8"))
-            cookies = data.get("cookies", [])
         except Exception as exc:
             raise SessionError(f"invalid storage state: {exc}") from exc
+        if not isinstance(data, dict):
+            raise SessionError(f"invalid storage state {state_path}: expected a JSON object")
+
+        cookies = data.get("cookies") or []
         if cookies:
-            self._context.add_cookies(cookies)
+            try:
+                self._context.add_cookies(cookies)
+            except Exception as exc:
+                raise SessionError(f"cannot apply cookies: {exc}") from exc
+
+        from .session import restore_origins
+
+        try:
+            restore_origins(self._context, data.get("origins") or [])
+        except SessionError:
+            raise
+        except Exception as exc:
+            raise SessionError(f"cannot restore localStorage: {exc}") from exc
 
     @staticmethod
     def info() -> Dict[str, Any]:
