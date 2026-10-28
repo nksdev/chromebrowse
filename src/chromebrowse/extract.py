@@ -134,21 +134,117 @@ def html_to_text(html: str) -> str:
     return parser.get_text()
 
 
+class _MarkdownExtractor(HTMLParser):
+    """Small dependency-free HTML-to-Markdown converter."""
+
+    _SKIP = {"script", "style", "noscript", "template", "iframe", "svg", "canvas", "head"}
+    _BLOCK = {
+        "address", "article", "aside", "div", "dl", "fieldset", "figcaption",
+        "figure", "footer", "form", "header", "main", "nav", "p", "section",
+        "table", "ul", "ol",
+    }
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.parts: List[str] = []
+        self.skip_depth = 0
+        self.pre_depth = 0
+        self.lists: List[dict] = []
+        self.wrappers = []
+
+    def handle_starttag(self, tag, attrs):
+        tag = tag.lower()
+        attrs = dict(attrs)
+        if tag in self._SKIP:
+            self.skip_depth += 1
+            return
+        if self.skip_depth:
+            return
+        if tag in self._BLOCK:
+            self.parts.append("\n\n")
+        if tag in {"h1", "h2", "h3", "h4", "h5", "h6"}:
+            self.parts.append("\n\n" + "#" * int(tag[1]) + " ")
+        elif tag == "br":
+            self.parts.append("\n")
+        elif tag == "hr":
+            self.parts.append("\n\n---\n\n")
+        elif tag == "pre":
+            self.pre_depth += 1
+            self.parts.append("\n\n" + chr(96) * 3 + "\n")
+        elif tag == "code" and not self.pre_depth:
+            self.wrappers.append((tag, len(self.parts), chr(96), chr(96)))
+        elif tag in {"strong", "b"}:
+            self.wrappers.append((tag, len(self.parts), "**", "**"))
+        elif tag in {"em", "i"}:
+            self.wrappers.append((tag, len(self.parts), "*", "*"))
+        elif tag == "a" and attrs.get("href"):
+            self.wrappers.append((tag, len(self.parts), "[", "](" + attrs["href"] + ")"))
+        elif tag == "img":
+            src = attrs.get("src", "")
+            alt = attrs.get("alt", "")
+            if src:
+                self.parts.append(f"![{alt}]({src})")
+        elif tag in {"ul", "ol"}:
+            self.lists.append({"type": tag, "count": 0})
+        elif tag == "li":
+            if self.lists and self.lists[-1]["type"] == "ol":
+                self.lists[-1]["count"] += 1
+                self.parts.append(f"\n{self.lists[-1]['count']}. ")
+            else:
+                self.parts.append("\n- ")
+        elif tag == "blockquote":
+            self.parts.append("\n\n> ")
+
+    def handle_endtag(self, tag):
+        tag = tag.lower()
+        if tag in self._SKIP:
+            if self.skip_depth:
+                self.skip_depth -= 1
+            return
+        if self.skip_depth:
+            return
+        if tag in {"a", "strong", "b", "em", "i", "code"}:
+            for index in range(len(self.wrappers) - 1, -1, -1):
+                wrapper_tag, start, prefix, suffix = self.wrappers[index]
+                if wrapper_tag == tag:
+                    inner = "".join(self.parts[start:])
+                    del self.parts[start:]
+                    self.parts.append(prefix + inner + suffix if inner else "")
+                    del self.wrappers[index]
+                    break
+        elif tag == "pre":
+            self.pre_depth = max(0, self.pre_depth - 1)
+            self.parts.append("\n" + chr(96) * 3 + "\n\n")
+        elif tag in {"h1", "h2", "h3", "h4", "h5", "h6"}:
+            self.parts.append("\n\n")
+        elif tag == "li" or tag == "tr":
+            self.parts.append("\n")
+        elif tag in {"ul", "ol"}:
+            if self.lists:
+                self.lists.pop()
+            self.parts.append("\n\n")
+        elif tag in self._BLOCK or tag == "blockquote":
+            self.parts.append("\n\n")
+
+    def handle_data(self, data):
+        if self.skip_depth:
+            return
+        self.parts.append(data if self.pre_depth else re.sub(r"\s+", " ", data))
+
+
 def html_to_markdown(html: str) -> str:
-    """Very small HTML-to-Markdown conversion (headings, links, lists, bold/italic)."""
+    """Convert HTML to approximate Markdown without external dependencies.
+
+    Handles headings, paragraphs, links, ordered/unordered lists, emphasis,
+    inline/preformatted code, horizontal rules, images, and HTML entities. It is
+    intentionally not a full CommonMark implementation.
+    """
     if not html:
         return ""
-    s = html
-    s = re.sub(r"(?is)<(script|style|noscript|template)[^>]*>.*?</\1>", "", s)
-    for level in range(1, 7):
-        s = re.sub(rf"(?is)<h{level}[^>]*>(.*?)</h{level}>", lambda m, l=level: "\n" + "#" * l + " " + m.group(1).strip() + "\n", s)
-    s = re.sub(r"(?is)<li[^>]*>(.*?)</li>", lambda m: "\n- " + m.group(1).strip(), s)
-    s = re.sub(r"(?is)<a[^>]*href=[\"']([^\"']+)[\"'][^>]*>(.*?)</a>", lambda m: f"[{re.sub(r'<[^>]+>', '', m.group(2)).strip()}]({m.group(1)})", s)
-    s = re.sub(r"(?is)<(strong|b)[^>]*>(.*?)</\1>", lambda m: f"**{m.group(2).strip()}**", s)
-    s = re.sub(r"(?is)<(em|i)[^>]*>(.*?)</\1>", lambda m: f"*{m.group(2).strip()}*", s)
-    s = re.sub(r"(?is)<br\s*/?>", "\n", s)
-    s = re.sub(r"(?is)</(p|div|section|article|tr|blockquote)>\s*", "\n\n", s)
-    s = re.sub(r"<[^>]+>", "", s)
-    s = re.sub(r"[ \t]+", " ", s)
-    s = re.sub(r"\n{3,}", "\n\n", s)
-    return s.strip()
+    parser = _MarkdownExtractor()
+    try:
+        parser.feed(html)
+        parser.close()
+    except Exception:
+        return re.sub(r"<[^>]+>", "", html).strip()
+    return "".join(parser.parts).strip()
