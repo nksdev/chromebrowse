@@ -248,7 +248,8 @@ from chromebrowse import Browser
 
 
 def main() -> int:
-    content = Browser().fetch(sys.argv[1], include_links=True)
+    with Browser() as browser:
+        content = browser.fetch(sys.argv[1], include_links=True)
     json.dump(content.as_dict(), sys.stdout, indent=2)
     return 0
 
