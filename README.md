@@ -77,7 +77,7 @@ pip install chromebrowse
 Verify it works end to end:
 
 ```bash
-python -c "from chromebrowse import Browser; print(Browser().open('https://example.com').title)"
+python -c "from chromebrowse import Browser; b=Browser(); print(b.open('https://example.com').title); b.close()"
 # Example Domain
 ```
 
