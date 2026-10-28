@@ -126,3 +126,46 @@ def test_public_only_rejects_file_navigation_before_playwright(monkeypatch):
         browser._navigate(page, "file:///etc/passwd")
 
     assert fake_page.called is False
+
+
+
+@pytest.mark.parametrize(
+    "resource_type,block_images,blocked_types,expected_abort",
+    [
+        ("image", True, {"font"}, True),
+        ("font", True, {"font"}, True),
+        ("script", True, {"font"}, False),
+    ],
+)
+def test_request_router_combines_resource_blocking(
+    resource_type, block_images, blocked_types, expected_abort
+):
+    from chromebrowse.browser import _request_router
+
+    class FakeRoute:
+        def __init__(self):
+            self.aborted = False
+            self.continued = False
+
+        def abort(self, reason=None):
+            self.aborted = True
+
+        def continue_(self):
+            self.continued = True
+
+    class FakeRequest:
+        url = "https://example.com/asset"
+        def __init__(self, kind):
+            self.resource_type = kind
+
+    route = FakeRoute()
+    _request_router(
+        route,
+        FakeRequest(resource_type),
+        public_only=False,
+        block_images=block_images,
+        blocked_types=blocked_types,
+    )
+
+    assert route.aborted is expected_abort
+    assert route.continued is (not expected_abort)
