@@ -15,7 +15,7 @@ EXTRACT_TEXT_JS = r"""
     if (!node) return;
     if (node.nodeType === Node.TEXT_NODE) {
       const t = node.nodeValue;
-      if (t && t.trim()) parts.push(t.replace(/\s+/g, ' ').trim());
+      if (t && t.trim()) parts.push(t.replace(/\s+/g, ' '));
       return;
     }
     if (node.nodeType !== Node.ELEMENT_NODE) return;
@@ -29,7 +29,7 @@ EXTRACT_TEXT_JS = r"""
     if (isBlock) parts.push('\n');
   };
   walk(document.body || document.documentElement);
-  return parts.join(' ').replace(/[ \t]+/g, ' ').replace(/\n\s*\n+/g, '\n\n').trim();
+  return parts.join('').replace(/[ \t]+/g, ' ').replace(/ *\n */g, '\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 """
 
@@ -114,8 +114,10 @@ class _TextExtractor(HTMLParser):
 
     def get_text(self) -> str:
         raw = "".join(self.parts)
-        # Collapse all runs of whitespace (including newlines) into single spaces.
-        raw = re.sub(r"\s+", " ", raw)
+        # Collapse horizontal whitespace but preserve paragraph/list boundaries.
+        raw = re.sub(r"[ \\t\\f\\v]+", " ", raw)
+        raw = re.sub(r" *\\n *", "\\n", raw)
+        raw = re.sub(r"\\n{3,}", "\\n\\n", raw)
         return raw.strip()
 
 
