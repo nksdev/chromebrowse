@@ -166,8 +166,70 @@ def require_chromium() -> str:
     if not exe:
         raise ChromiumNotFoundError(
             "No Chromium executable found. Install one with:\n"
-            "    python -m playwright install chromium\n"
-            "or set CHROMEBROWSE_CHROMIUM to an existing Chrome/Chromium binary."
+            "    chromebrowse install\n"
+            "or set CHROMEBROWSE_CHROMIUM to an existing Chrome/Chromium binary.\n"
+            "Or let chromebrowse fetch it automatically: Browser(auto_install=True)"
+        )
+    return exe
+
+
+def default_install_dir() -> Path:
+    """Writable directory used for an auto-downloaded Chromium."""
+    import os
+
+    env = os.environ.get("CHROMEBROWSE_BROWSERS_DIR")
+    if env:
+        return Path(env).expanduser()
+
+    here = Path(__file__).resolve()
+    for parent in list(here.parents)[:6]:
+        cand = parent / ".browsers"
+        if cand.is_dir():
+            return cand
+
+    home = Path.home()
+    try:
+        if os.access(home, os.W_OK):
+            return home / ".chromebrowse" / "browsers"
+    except OSError:
+        pass
+
+    return Path.cwd() / ".browsers"
+
+
+def install_chromium(
+    target_dir: Optional[Union[str, Path]] = None,
+    quiet: bool = False,
+) -> str:
+    """Download Chromium into ``target_dir`` and return the executable path.
+
+    Uses the Playwright installer under the hood so the result matches what
+    :func:`find_chromium` already knows how to discover.
+    """
+    import subprocess
+    import sys
+
+    target = Path(target_dir).expanduser().resolve() if target_dir else default_install_dir()
+    target.mkdir(parents=True, exist_ok=True)
+
+    env = dict(os.environ)
+    env["PLAYWRIGHT_BROWSERS_PATH"] = str(target)
+
+    cmd = [sys.executable, "-m", "playwright", "install", "chromium"]
+    stdout = subprocess.DEVNULL if quiet else None
+    result = subprocess.run(cmd, env=env, stdout=stdout, stderr=stdout)
+    if result.returncode != 0:
+        raise ChromiumNotFoundError(
+            f"automatic Chromium download failed (exit {result.returncode}). "
+            "Run 'chromebrowse install' manually for details."
+        )
+
+    # Make the fresh install discoverable for the rest of this process.
+    os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", str(target))
+    exe = find_chromium()
+    if not exe:
+        raise ChromiumNotFoundError(
+            f"Chromium downloaded to {target} but no executable was found there."
         )
     return exe
 
@@ -195,6 +257,9 @@ class BrowserConfig:
     slow_mo: float = 0.0
     args: List[str] = field(default_factory=list)
     downloads_path: Optional[str] = None
+    auto_install: bool = False  # download Chromium on first launch if missing
+    install_dir: Optional[str] = None  # where auto_install places Chromium
+    prompt_install: bool = True  # ask before downloading when interactive
 
     def resolve_executable(self) -> Optional[str]:
         if self.executable_path:

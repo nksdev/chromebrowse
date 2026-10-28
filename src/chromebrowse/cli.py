@@ -84,20 +84,24 @@ def cmd_info(args: argparse.Namespace) -> int:
 
 def cmd_install(args: argparse.Namespace) -> int:
     """Download Chromium into a project-local .browsers directory."""
-    target = Path(args.dir).expanduser().resolve() if args.dir else Path.cwd() / ".browsers"
-    target.mkdir(parents=True, exist_ok=True)
-    env = dict(os.environ)
-    env["PLAYWRIGHT_BROWSERS_PATH"] = str(target)
+    from .config import default_install_dir, install_chromium
+
+    target = Path(args.dir).expanduser().resolve() if args.dir else default_install_dir()
+
+    existing = find_chromium()
+    if existing and not args.force:
+        print(f"Chromium already available: {existing}")
+        print("Use --force to download a fresh copy anyway.")
+        return 0
+
     print(f"Installing Chromium into {target} ...")
     try:
-        subprocess.run(
-            [sys.executable, "-m", "playwright", "install", "chromium"],
-            check=True, env=env,
-        )
-    except subprocess.CalledProcessError as exc:
-        print(f"error: chromium install failed ({exc})", file=sys.stderr)
+        exe = install_chromium(target, quiet=False)
+    except BrowserError as exc:
+        print(f"error: {exc}", file=sys.stderr)
         return 1
-    print("Done. Chromium installed at:", target)
+    print("Done. Chromium installed at:")
+    print(" ", exe)
     return 0
 
 
@@ -296,7 +300,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=cmd_info)
 
     p = sub.add_parser("install", help="download Chromium locally")
-    p.add_argument("--dir", default=None, help="destination directory (default: ./.browsers)")
+    p.add_argument("--dir", default=None, help="destination directory (default: auto-detected)")
+    p.add_argument("--force", action="store_true", help="download even if Chromium is already available")
     p.set_defaults(func=cmd_install)
 
     p = sub.add_parser("text", help="print rendered page text")

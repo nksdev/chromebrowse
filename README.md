@@ -59,6 +59,33 @@ chromebrowse install
 This places Chromium in `./.browsers` (or `--dir PATH`) so the package is
 fully self-contained and never depends on a system browser.
 
+### Automatic download (optional)
+
+Prefer zero setup? Let `chromebrowse` fetch Chromium the first time it needs
+one. It asks for confirmation before downloading:
+
+
+from chromebrowse import Browser, BrowserConfig
+
+# Ask once, then download and launch in one step
+with Browser(BrowserConfig(auto_install=True)) as b:
+    print(b.open("https://example.com").title)
+
+
+On the command line the same flow runs automatically the first time a
+browsing command finds no Chromium — it prompts `Download it now? [Y/n]` and
+installs, then continues with your original request.
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `auto_install` | `False` | Download Chromium when none is found |
+| `prompt_install` | `True` | Ask for confirmation first (skipped when non-interactive) |
+| `install_dir` | auto-detected | Where to place the download |
+
+Set `CHROMEBROWSE_BROWSERS_DIR` to pin the download location. In CI, use
+`chromebrowse install --dir .browsers` explicitly so network access stays
+predictable.
+
 ### How Chromium is located
 
 At runtime `chromebrowse` searches, in order:

@@ -381,7 +381,7 @@ class Browser:
                     os.environ["PLAYWRIGHT_BROWSERS_PATH"] = str(d)
                     break
 
-        require_chromium()
+        self._ensure_chromium()
         try:
             self._pw = sync_playwright().start()
             launch_kwargs = self.config.to_launch_kwargs()
@@ -405,6 +405,41 @@ class Browser:
             raise BrowserLaunchError(f"failed to launch Chromium: {exc}") from exc
         self._started = True
         return self
+
+    def _ensure_chromium(self) -> None:
+        """Make sure a Chromium binary exists, optionally downloading it."""
+        from .config import (
+            find_chromium,
+            install_chromium,
+            default_install_dir,
+            require_chromium,
+        )
+
+        if self.config.executable_path or find_chromium():
+            return
+
+        if not self.config.auto_install:
+            require_chromium()  # raises with actionable message
+            return
+
+        target = self.config.install_dir or default_install_dir()
+
+        if self.config.prompt_install:
+            import sys
+
+            interactive = sys.stdin.isatty() and sys.stdout.isatty()
+            if interactive:
+                answer = input(
+                    f"Chromium is not installed. Download it now to {target}? "
+                    f"(~150 MB) [Y/n] "
+                ).strip().lower()
+                if answer and not answer.startswith("y"):
+                    raise ChromiumNotFoundError(
+                        "Chromium download declined. Run 'chromebrowse install' when ready."
+                    )
+
+        exe = install_chromium(target, quiet=False)
+        self.config.executable_path = exe
 
     def _safe_stop(self) -> None:
         try:

@@ -85,3 +85,45 @@ def test_require_chromium_returns_path_when_found(monkeypatch, tmp_path):
     fake.write_text("")
     monkeypatch.setattr("chromebrowse.config.find_chromium", lambda: str(fake))
     assert require_chromium() == str(fake)
+
+
+def test_auto_install_defaults_off():
+    cfg = BrowserConfig()
+    assert cfg.auto_install is False
+    assert cfg.prompt_install is True
+    assert cfg.install_dir is None
+
+
+def test_default_install_dir_is_path():
+    from chromebrowse.config import default_install_dir
+
+    d = default_install_dir()
+    assert isinstance(d, Path)
+
+
+def test_install_chromium_rejects_bad_playwright(monkeypatch, tmp_path):
+    """A failing installer must raise ChromiumNotFoundError, not leak subprocess errors."""
+    import subprocess
+    from chromebrowse.config import install_chromium
+
+    class FakeResult:
+        returncode = 1
+
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: FakeResult())
+    with pytest.raises(ChromiumNotFoundError):
+        install_chromium(tmp_path, quiet=True)
+
+
+def test_install_chromium_creates_target_dir(monkeypatch, tmp_path):
+    import subprocess
+    from chromebrowse.config import install_chromium
+
+    class FakeResult:
+        returncode = 0
+
+    target = tmp_path / "nested" / "browsers"
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: FakeResult())
+    monkeypatch.setattr("chromebrowse.config.find_chromium", lambda: "/fake/chrome")
+    exe = install_chromium(target, quiet=True)
+    assert exe == "/fake/chrome"
+    assert target.is_dir()
