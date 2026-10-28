@@ -47,3 +47,29 @@ def test_html_to_markdown_lists_and_emphasis():
 
 def test_html_to_markdown_empty():
     assert html_to_markdown("") == ""
+
+
+
+def test_html_to_text_preserves_block_boundaries():
+    text = html_to_text("<p>First paragraph.</p><p>Second paragraph.</p><ul><li>one</li><li>two</li></ul>")
+    assert "First paragraph.\n\nSecond paragraph." in text
+    assert "one" in text and "two" in text
+    assert "\n" in text
+
+
+def test_html_to_markdown_decodes_entities_and_handles_attribute_order():
+    md = html_to_markdown(
+        '<p>Tom &amp; Jerry</p><a title="more" href="/docs">Read <strong>docs</strong></a>'
+        '<img alt="diagram" src="/diagram.png">'
+    )
+    assert "Tom & Jerry" in md
+    assert "[Read **docs**](/docs)" in md
+    assert "![diagram](/diagram.png)" in md
+
+
+def test_html_to_markdown_ordered_lists_and_preformatted_code():
+    md = html_to_markdown("<ol><li>first</li><li>second</li></ol><pre><code>x = 1\nprint(x)</code></pre>")
+    assert "1. first" in md
+    assert "2. second" in md
+    assert "x = 1\nprint(x)" in md
+    assert chr(96) * 3 in md

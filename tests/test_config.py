@@ -131,3 +131,13 @@ def test_install_chromium_creates_target_dir(monkeypatch, tmp_path):
     exe = install_chromium(target, quiet=True)
     assert exe == str(exe_path)
     assert target.is_dir()
+
+
+
+def test_public_only_is_opt_in_and_roundtrips():
+    default = BrowserConfig()
+    assert default.public_only is False
+
+    restricted = BrowserConfig.from_dict({"public_only": True})
+    assert restricted.public_only is True
+    assert BrowserConfig.from_dict(restricted.as_dict()).public_only is True

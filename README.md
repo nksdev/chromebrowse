@@ -77,7 +77,7 @@ pip install chromebrowse
 Verify it works end to end:
 
 ```bash
-python -c "from chromebrowse import Browser; print(Browser().open('https://example.com').title)"
+python -c "from chromebrowse import Browser; b=Browser(); print(b.open('https://example.com').title); b.close()"
 # Example Domain
 ```
 
@@ -164,7 +164,7 @@ background daemon, and no configuration file required.
 > reuse it for every request. Launching a browser costs ~300 ms and a few
 > hundred MB, so doing it per request will not scale.
 
-> **Security warning:** the `/read?url=...` example below is a minimal demonstration, not a production-safe public endpoint. Do not expose arbitrary URL browsing to untrusted callers without a deliberate SSRF defense. Enforce HTTP/HTTPS-only schemes, validate every redirect and resolved address, block loopback/private/link-local/reserved IP ranges, and apply network-level egress restrictions to defend against DNS rebinding and browser subresource requests. Prefer an allowlist of permitted destinations.
+> **Security warning:** the `/read?url=...` example below enables `BrowserConfig(public_only=True)`, a defense-in-depth URL filter that restricts every browser request to HTTP/HTTPS and rejects non-global destination addresses. It is **not a complete SSRF boundary**: DNS can change between validation and Chromium's connection, and browser traffic can reach destinations through network behaviors outside URL parsing. For a public service, also enforce outbound network/firewall policy that blocks internal, loopback, link-local, metadata, and other restricted ranges; preferably allowlist destinations. The default remains unrestricted so authorized pentests and local labs continue to work.
 ---
 
 ## Five real-world examples
@@ -195,7 +195,7 @@ from contextlib import asynccontextmanager
 from functools import partial
 
 from fastapi import FastAPI, HTTPException
-from chromebrowse import Browser, BrowserError
+from chromebrowse import Browser, BrowserConfig, BrowserError
 
 executor = ThreadPoolExecutor(max_workers=1)
 browser = None
@@ -216,7 +216,9 @@ async def lifespan(app: FastAPI):
     global browser
     loop = asyncio.get_running_loop()
     try:
-        browser = await loop.run_in_executor(executor, lambda: Browser().start())
+        browser = await loop.run_in_executor(
+            executor, lambda: Browser(BrowserConfig(public_only=True)).start()
+        )
         yield
     finally:
         if browser is not None:
@@ -421,6 +423,7 @@ from chromebrowse import (
     ChromiumNotFoundError,   # no binary, and auto-install is off
     NavigationError,         # the page failed to load
     ElementNotFoundError,    # a selector matched nothing
+    ElementInteractionError, # a matched element could not be interacted with
     BrowserTimeoutError,     # a wait timed out
     SessionError,            # session state problem
 )
@@ -564,6 +567,7 @@ config = BrowserConfig(
     args=[],
     auto_install=True,           # download Chromium if it is missing
     prompt_install=False,        # True = ask before downloading
+    public_only=False,           # opt-in HTTP(S)/globally-routable URL filter
     install_dir=None,            # where auto_install puts Chromium
 )
 
@@ -587,6 +591,30 @@ cfg = BrowserConfig.from_dict({"headless": False, "block_images": True})
 | `PLAYWRIGHT_BROWSERS_PATH` | Standard Playwright browser location |
 
 ---
+
+### Public URL restriction (server-side defense in depth)
+
+For services that browse URLs supplied by untrusted callers, enable the opt-in
+policy:
+
+```python
+from chromebrowse import Browser, BrowserConfig
+
+with Browser(BrowserConfig(public_only=True)) as browser:
+    page = browser.open("https://example.com")
+    print(page.title)
+```
+
+The policy checks the initial URL, redirects, and subresource requests; permits
+only HTTP/HTTPS; rejects credentials, localhost names, and any host resolving
+to a non-global IP address. It is disabled by default to preserve authorized
+pentesting and local/private lab workflows.
+
+**This policy alone does not guarantee SSRF protection.** DNS may change between
+validation and Chromium's connection. Deployments accepting untrusted URLs must
+also enforce network-level egress controls and should use an allowlist whenever
+possible. The `public_only` flag is not a replacement for firewall or proxy
+isolation.
 
 ## How Chromium is found
 
@@ -638,7 +666,7 @@ python -m venv .venv
 source .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install -e ".[dev]"
 
-pytest                              # offline suite, fast (31 tests)
+pytest                              # offline regression suite
 CHROMEBROWSE_LIVE=1 pytest tests/test_live.py -v   # real browser (6 tests)
 ```
 

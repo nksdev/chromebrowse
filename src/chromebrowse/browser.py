@@ -11,6 +11,7 @@ from .config import BrowserConfig, platform_info, require_chromium
 from .exceptions import (
     BrowserLaunchError,
     ChromiumNotFoundError,
+    ElementInteractionError,
     ElementNotFoundError,
     NavigationError,
     SessionError,
@@ -65,16 +66,20 @@ class Element:
 
     def click(self, timeout: Optional[float] = None) -> "Page":
         try:
-            self._locator.click(timeout=timeout or self._page._timeout)
+            self._locator.click(timeout=self._page._timeout if timeout is None else timeout)
         except Exception as exc:
-            raise ElementNotFoundError(f"cannot click {self._selector!r}: {exc}") from exc
+            if exc.__class__.__name__ == "TimeoutError":
+                raise BrowserTimeoutError(f"timed out clicking {self._selector!r}: {exc}") from exc
+            raise ElementInteractionError(f"cannot click {self._selector!r}: {exc}") from exc
         return self._page
 
     def fill(self, value: str, timeout: Optional[float] = None) -> "Page":
         try:
-            self._locator.fill(value, timeout=timeout or self._page._timeout)
+            self._locator.fill(value, timeout=self._page._timeout if timeout is None else timeout)
         except Exception as exc:
-            raise ElementNotFoundError(f"cannot fill {self._selector!r}: {exc}") from exc
+            if exc.__class__.__name__ == "TimeoutError":
+                raise BrowserTimeoutError(f"timed out filling {self._selector!r}: {exc}") from exc
+            raise ElementInteractionError(f"cannot fill {self._selector!r}: {exc}") from exc
         return self._page
 
     def type_text(self, value: str, delay: float = 0.0) -> "Page":
@@ -251,14 +256,14 @@ class Page:
 
     def wait_for(self, selector: str, state: str = "visible", timeout: Optional[float] = None) -> "Page":
         try:
-            self._pw_page.wait_for_selector(selector, state=state, timeout=timeout or self._timeout)
+            self._pw_page.wait_for_selector(selector, state=state, timeout=self._timeout if timeout is None else timeout)
         except Exception as exc:
             raise BrowserTimeoutError(f"timeout waiting for {selector!r} ({state}): {exc}") from exc
         return self
 
     def wait_for_load(self, state: LoadState = "load", timeout: Optional[float] = None) -> "Page":
         try:
-            self._pw_page.wait_for_load_state(state, timeout=timeout or self._timeout)
+            self._pw_page.wait_for_load_state(state, timeout=self._timeout if timeout is None else timeout)
         except Exception as exc:
             raise BrowserTimeoutError(f"timeout waiting for load state {state!r}: {exc}") from exc
         return self
@@ -400,7 +405,19 @@ class Browser:
                 self._context = self._browser.new_context(**self.config.context_kwargs())
             self._context.set_default_timeout(self.config.default_timeout)
             self._context.set_default_navigation_timeout(self.config.navigation_timeout)
-            if self.config.block_images:
+            if self.config.public_only:
+                blocked = set(self.config.block_resources)
+                self._context.route(
+                    "**/*",
+                    lambda route, req: _request_router(
+                        route,
+                        req,
+                        public_only=True,
+                        block_images=self.config.block_images,
+                        blocked_types=blocked,
+                    ),
+                )
+            elif self.config.block_images:
                 self._context.route("**/*", _block_images_router)
             elif self.config.block_resources:
                 blocked = set(self.config.block_resources)
@@ -538,7 +555,15 @@ class Browser:
                 url = "https://" + url
         start = time.perf_counter()
         try:
-            response = page._pw_page.goto(url, wait_until=wait_until, timeout=timeout or self.config.navigation_timeout)
+            if self.config.public_only:
+                from .security import validate_public_url
+
+                validate_public_url(url)
+            response = page._pw_page.goto(
+                url,
+                wait_until=wait_until,
+                timeout=self.config.navigation_timeout if timeout is None else timeout,
+            )
         except Exception as exc:
             raise NavigationError(f"failed to open {url!r}: {exc}") from exc
         page.elapsed_ms = (time.perf_counter() - start) * 1000
@@ -657,6 +682,28 @@ def _block_images_router(route, request) -> None:  # pragma: no cover - browser 
 
 def _block_types_router(route, request, blocked) -> None:  # pragma: no cover - browser side
     if request.resource_type in blocked:
+        route.abort()
+    else:
+        route.continue_()
+
+def _request_router(route, request, *, public_only: bool, block_images: bool, blocked_types) -> None:
+    """Apply URL and resource policies in one route handler.
+
+    Playwright runs the most recently registered route first, so combining
+    these checks avoids one policy accidentally bypassing another.
+    """
+    if public_only:
+        from .security import PublicURLRejected, validate_public_url
+
+        try:
+            validate_public_url(request.url)
+        except PublicURLRejected:
+            route.abort("blockedbyclient")
+            return
+
+    if block_images and request.resource_type == "image":
+        route.abort()
+    elif request.resource_type in blocked_types:
         route.abort()
     else:
         route.continue_()

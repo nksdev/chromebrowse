@@ -23,6 +23,10 @@ class ElementNotFoundError(BrowserError):
     """Raised when a selector matches no element."""
 
 
+class ElementInteractionError(BrowserError):
+    """Raised when an existing element cannot be interacted with."""
+
+
 class TimeoutError(BrowserError):
     """Raised when an operation exceeds its time budget."""
 

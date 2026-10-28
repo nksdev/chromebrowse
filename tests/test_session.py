@@ -1,6 +1,7 @@
 """Tests for session state helpers (filesystem only, no browser)."""
 
 import json
+import pytest
 from pathlib import Path
 
 from chromebrowse.session import delete_session, list_sessions
@@ -186,3 +187,33 @@ def test_clear_does_not_recreate_state_file_on_close(tmp_path):
 
     assert fake_browser.closed is True
     assert not state_file.exists()
+
+
+
+def test_session_start_resets_browser_after_launch_failure(tmp_path, monkeypatch):
+    from chromebrowse import session as session_module
+
+    class BrokenBrowser:
+        def __init__(self, config):
+            self.closed = False
+
+        def start(self):
+            raise RuntimeError("launch failed")
+
+        def close(self):
+            self.closed = True
+
+    instances = []
+    def factory(config):
+        instance = BrokenBrowser(config)
+        instances.append(instance)
+        return instance
+
+    monkeypatch.setattr(session_module, "Browser", factory)
+    session = session_module.Session("broken-launch", state_dir=tmp_path)
+
+    with pytest.raises(RuntimeError, match="launch failed"):
+        session.start()
+
+    assert session._browser is None
+    assert instances[0].closed is True

@@ -157,3 +157,14 @@ def test_fetch_markdown_flag_prints_markdown(monkeypatch, capsys):
     monkeypatch.setattr(cli, "Browser", FakeBrowser)
     assert main(["fetch", "https://example.com", "--markdown"]) == 0
     assert capsys.readouterr().out == "# Markdown\n"
+
+
+
+def test_cli_preserves_explicit_zero_timeout():
+    from chromebrowse.cli import _config_from_args, build_parser
+
+    args = build_parser().parse_args(["text", "https://example.com", "--timeout", "0"])
+    config = _config_from_args(args)
+
+    assert config.navigation_timeout == 0
+    assert config.default_timeout == 0

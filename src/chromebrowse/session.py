@@ -107,7 +107,15 @@ class Session:
         if self._browser is not None:
             return self
         self._browser = Browser(self.config)
-        self._browser.start()
+        try:
+            self._browser.start()
+        except Exception:
+            try:
+                self._browser.close()
+            except Exception:
+                pass
+            self._browser = None
+            raise
         if self.persist and self.state_path.is_file():
             try:
                 self._load_state_file(self.state_path)
