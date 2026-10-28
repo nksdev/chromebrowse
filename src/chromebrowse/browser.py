@@ -323,10 +323,13 @@ class Page:
         return str(path)
 
     def close(self) -> None:
+        """Close this tab and release its wrapper from the owning browser."""
         try:
             self._pw_page.close()
         except Exception:
             pass
+        finally:
+            self._browser._forget_page(self)
 
     def __enter__(self) -> "Page":
         return self
@@ -463,6 +466,14 @@ class Browser:
         self._browser = None
         self._pw = None
         self._started = False
+
+    def _forget_page(self, page: Page) -> None:
+        """Remove a closed page wrapper from the browser's registry."""
+        try:
+            self._pages.remove(page)
+        except ValueError:
+            # Closing a page more than once is safe.
+            pass
 
     def close(self) -> None:
         for p in list(self._pages):
