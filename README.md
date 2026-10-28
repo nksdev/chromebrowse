@@ -232,7 +232,9 @@ with Browser() as browser:
     page.reload()
 
     for event in observer.events:
-        print(event.kind, event.method, event.url)
+        record = event.request or event.response or event.failed
+        method = record.method if record is not None else "?"
+        print(event.kind, method, event.url)
 
     print("Events dropped because the buffer filled:", observer.dropped)
     observer.stop()
