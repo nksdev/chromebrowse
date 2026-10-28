@@ -118,20 +118,88 @@ class Session:
         assert self._browser is not None
         try:
             data = json.loads(path.read_text("utf-8"))
+            if not isinstance(data, dict):
+                raise ValueError("storage state must be a JSON object")
         except Exception as exc:
             raise SessionError(f"cannot read state {path}: {exc}") from exc
+
         cookies = data.get("cookies") or []
+        if not isinstance(cookies, list):
+            raise SessionError("invalid storage state: 'cookies' must be a list")
         if cookies:
             try:
                 self._browser.context.add_cookies(cookies)
             except Exception as exc:
                 raise SessionError(f"cannot apply cookies: {exc}") from exc
 
+        # Playwright storage-state files also contain per-origin localStorage.
+        # Seed it before site scripts run so restored sessions behave like the
+        # original context. This script is scoped to exact origins.
+        origins = data.get("origins") or []
+        if not isinstance(origins, list):
+            raise SessionError("invalid storage state: 'origins' must be a list")
+        stores = {}
+        for entry in origins:
+            if not isinstance(entry, dict):
+                continue
+            origin = entry.get("origin")
+            items = entry.get("localStorage") or []
+            if isinstance(origin, str) and isinstance(items, list):
+                stores[origin] = {
+                    str(item["name"]): str(item.get("value", ""))
+                    for item in items
+                    if isinstance(item, dict) and "name" in item
+                }
+        if stores:
+            payload = json.dumps(stores, ensure_ascii=True)
+            script = (
+                "(() => { const stores = " + payload + "; "
+                "const values = stores[window.location.origin]; "
+                "if (values) { for (const [key, value] of Object.entries(values)) "
+                "{ try { window.localStorage.setItem(key, value); } catch (_) {} } } })();"
+            )
+            try:
+                self._browser.context.add_init_script(script=script)
+            except Exception as exc:
+                raise SessionError(f"cannot restore localStorage: {exc}") from exc
+
     def save(self) -> str:
-        """Persist cookies + localStorage to the session state file."""
+        """Persist cookies + localStorage to a private session state file."""
+        import os
+        import tempfile
+
         assert self._browser is not None, "session not started"
         self.state_dir.mkdir(parents=True, exist_ok=True)
-        self._browser.context.storage_state(path=str(self.state_path))
+        try:
+            os.chmod(self.state_dir, 0o700)
+        except OSError:
+            pass  # Windows and some managed filesystems do not support POSIX modes.
+
+        state = self._browser.context.storage_state()
+        fd, temporary = tempfile.mkstemp(prefix=".chromebrowse-", suffix=".tmp", dir=str(self.state_dir))
+        try:
+            try:
+                os.chmod(temporary, 0o600)
+            except OSError:
+                pass
+            with os.fdopen(fd, "w", encoding="utf-8") as stream:
+                json.dump(state, stream, ensure_ascii=False, indent=2)
+                stream.write("\n")
+            os.replace(temporary, self.state_path)
+            try:
+                os.chmod(self.state_path, 0o600)
+            except OSError:
+                pass
+        except Exception:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+            try:
+                os.unlink(temporary)
+            except OSError:
+                pass
+            raise
         return str(self.state_path)
 
     def clear(self) -> None:
@@ -162,9 +230,15 @@ class Session:
         return self._page
 
     def fetch(self, url: str, **kwargs: Any):
-        return self.open(url, **kwargs).extract(
-            include_html=kwargs.pop("include_html", False),
-            include_links=kwargs.pop("include_links", False),
+        """Navigate and extract page content without closing the persistent page."""
+        include_html = kwargs.pop("include_html", False)
+        include_links = kwargs.pop("include_links", False)
+        include_markdown = kwargs.pop("include_markdown", False)
+        page = self.open(url, **kwargs)
+        return page.extract(
+            include_html=include_html,
+            include_links=include_links,
+            include_markdown=include_markdown,
         )
 
     def cookies(self) -> List[Dict[str, Any]]:

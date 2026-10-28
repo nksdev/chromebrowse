@@ -17,7 +17,7 @@ from .exceptions import (
     TimeoutError as BrowserTimeoutError,
 )
 from .models import Link, PageContent, Snapshot
-from .extract import EXTRACT_LINKS_JS, EXTRACT_TEXT_JS, EXTRACT_META_JS, html_to_text
+from .extract import EXTRACT_LINKS_JS, EXTRACT_TEXT_JS, EXTRACT_META_JS, html_to_text, html_to_markdown
 
 Selector = str
 LoadState = str  # "load" | "domcontentloaded" | "networkidle" | "commit"
@@ -148,7 +148,8 @@ class Page:
         return self.content()
 
     def markdown(self) -> str:
-        return html_to_text(self.content())
+        """Return a Markdown approximation of the rendered page HTML."""
+        return html_to_markdown(self.content())
 
     def links(self, absolute: bool = True) -> List[Link]:
         raw = self._pw_page.evaluate(EXTRACT_LINKS_JS) or []
@@ -212,7 +213,7 @@ class Page:
         if include_html:
             content.html = self.content()
         if include_markdown:
-            content.markdown = html_to_text(content.html or self.content())
+            content.markdown = html_to_markdown(content.html or self.content())
         if include_links:
             content.links = self.links()
         try:
