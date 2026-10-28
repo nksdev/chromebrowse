@@ -107,7 +107,7 @@ jobs:
       - name: Install wheel and smoke-test installed package
         shell: bash
         run: |
-          python -m pip install --no-deps dist/*.whl
+          python -m pip install dist/*.whl
           python -m pip check
           python -m chromebrowse --version
           python -c "import chromebrowse; from chromebrowse import Browser, BrowserConfig, Session; print('Imported package from:', chromebrowse.__file__)"
