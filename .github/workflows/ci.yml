@@ -53,7 +53,7 @@ jobs:
           pip install -e ".[dev]"
 
       - name: Run offline tests
-        run: pytest tests/ --ignore=tests/test_live.py -v
+        run: pytest tests/ --ignore=tests/test_live.py --ignore=tests/test_live_new_apis.py -v
 
   live:
     name: live browser tests (${{ matrix.os }})
@@ -84,7 +84,7 @@ jobs:
         env:
           CHROMEBROWSE_LIVE: "1"
           PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.browsers
-        run: pytest tests/test_live.py -v
+        run: pytest tests/test_live.py tests/test_live_new_apis.py -v
 
   build:
     name: build distribution
