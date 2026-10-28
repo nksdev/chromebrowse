@@ -242,21 +242,26 @@ class Session:
                 pass
 
     def close(self) -> None:
-        if self._browser is not None:
-            if self.persist and not self._skip_save_on_close:
-                try:
-                    self.save()
-                except Exception as exc:
-                    import warnings
-                    warnings.warn(
-                        f"failed to persist session {self.name!r}: {exc}",
-                        RuntimeWarning,
-                        stacklevel=2,
-                    )
-            self._browser.close()
-        self._browser = None
-        self._page = None
-        self._skip_save_on_close = False
+        browser = self._browser
+        try:
+            if browser is not None:
+                if self.persist and not self._skip_save_on_close:
+                    try:
+                        self.save()
+                    except Exception as exc:
+                        import warnings
+                        warnings.warn(
+                            f"failed to persist session {self.name!r}: {exc}",
+                            RuntimeWarning,
+                            stacklevel=2,
+                        )
+                browser.close()
+        finally:
+            # Keep the Session reusable even if the underlying browser reports
+            # an error while closing.
+            self._browser = None
+            self._page = None
+            self._skip_save_on_close = False
 
     # ----------------------------------------------------------- convenience
     def open(self, url: str, **kwargs: Any) -> Page:
