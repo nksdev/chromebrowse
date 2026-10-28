@@ -123,6 +123,7 @@ def cmd_fetch(args: argparse.Namespace) -> int:
             timeout=args.timeout,
             include_html=args.html,
             include_links=args.links,
+            include_markdown=args.markdown,
         )
     if args.json:
         _print_json(content.as_dict())
@@ -331,6 +332,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--json", action="store_true")
     p.add_argument("--html", action="store_true", help="include raw HTML")
     p.add_argument("--links", action="store_true", help="include links")
+    p.add_argument("--markdown", action="store_true", help="include Markdown conversion")
     p.add_argument("--title", action="store_true", help="print title first")
     p.add_argument("--max-chars", type=int, default=0)
     _add_common(p)
