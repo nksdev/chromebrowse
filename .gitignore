@@ -34,3 +34,6 @@ htmlcov/
 .idea/
 .vscode/
 *.swp
+
+# Local GitHub CLI / agent cache artifacts
+.ghcache/
