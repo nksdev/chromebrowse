@@ -553,7 +553,7 @@ config = BrowserConfig(
     viewport_height=800,
     locale="en-US",
     timezone="America/New_York",
-    user_agent=None,             # override the default UA
+    user_agent=None,             # use Playwright's Chromium-matched default
     java_script_enabled=True,    # False = faster, but no JS rendering
     block_images=False,          # True = much faster extraction
     block_resources=[],          # e.g. ["media", "font"]
