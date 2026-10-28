@@ -550,7 +550,15 @@ class Browser:
                 url = "https://" + url
         start = time.perf_counter()
         try:
-            response = page._pw_page.goto(url, wait_until=wait_until, timeout=timeout or self.config.navigation_timeout)
+            if self.config.public_only:
+                from .security import validate_public_url
+
+                validate_public_url(url)
+            response = page._pw_page.goto(
+                url,
+                wait_until=wait_until,
+                timeout=self.config.navigation_timeout if timeout is None else timeout,
+            )
         except Exception as exc:
             raise NavigationError(f"failed to open {url!r}: {exc}") from exc
         page.elapsed_ms = (time.perf_counter() - start) * 1000
