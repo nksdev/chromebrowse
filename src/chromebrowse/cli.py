@@ -199,8 +199,9 @@ def cmd_open(args: argparse.Namespace) -> int:
     with Browser(cfg) as b:
         page = b.open(args.url, wait_until=args.wait_until, timeout=args.timeout)
         print(f"Opened {page.current_url()}  ({page.title!r})")
-        print("Commands: text, html, title, url, links, shot FILE, click SEL,")
-        print("          fill SEL VALUE, wait SEL, goto URL, eval JS, back, quit")
+        print("Commands: text, html, title, url, links, shot [FILE], click SELECTOR,")
+        print("          fill SELECTOR VALUE, wait SELECTOR, goto URL, eval JS")
+        print("          back, forward, reload, help, quit")
         while True:
             try:
                 line = input("cb> ").strip()
