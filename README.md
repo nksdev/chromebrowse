@@ -31,6 +31,7 @@ Chromium install to manage.
 - [Recipes](#recipes)
 - [Configuration](#configuration)
 - [How Chromium is found](#how-chromium-is-found)
+- [Documentation](#documentation)
 - [Architecture](#architecture)
 - [Development](#development)
 - [Publishing to PyPI](#publishing-to-pypi)
@@ -716,6 +717,20 @@ To see what it resolved to:
 ```bash
 chromebrowse info
 ```
+---
+
+## Documentation
+
+Longer-form guides live in [`docs/`](docs/):
+
+| Document | Covers |
+|---|---|
+| [USER_GUIDE.md](docs/USER_GUIDE.md) | Task-oriented walkthrough of every feature |
+| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Module layout, design principles, testing strategy |
+| [NETWORK.md](docs/NETWORK.md) | Network observation, filters, bounds, redaction |
+| [CRAWLING.md](docs/CRAWLING.md) | Crawler scope, queue, resume, and deliberate limits |
+| [SECURITY.md](docs/SECURITY.md) | Scope vs authorization, SSRF, credential handling |
+
 ---
 
 ## Architecture

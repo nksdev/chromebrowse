@@ -17,7 +17,8 @@ from .exceptions import (
     SessionError,
     TimeoutError as BrowserTimeoutError,
 )
-from .models import Link, PageContent, Snapshot
+from .models import JsonLdBlock, Link, PageContent, Snapshot, Table
+from .hooks import HookSet
 from .extract import (
     EXTRACT_LINKS_JS,
     EXTRACT_META_JS,
@@ -193,6 +194,18 @@ class Page:
         """
         return self._pw_page.evaluate(EXTRACT_TABLES_JS, selector) or []
 
+    def structured_tables(self) -> List[Table]:
+        """Extract HTML tables as typed models while preserving the dict-based tables() API."""
+        from .extract import tables_from_raw
+
+        return tables_from_raw(self._pw_page.evaluate(EXTRACT_TABLES_JS) or [])
+
+    def jsonld(self) -> List[JsonLdBlock]:
+        """Parse each application/ld+json block independently."""
+        from .extract import EXTRACT_JSONLD_JS, parse_jsonld
+
+        return parse_jsonld(self._pw_page.evaluate(EXTRACT_JSONLD_JS) or [])
+
     def table(self, selector: str) -> Dict[str, Any]:
         """Extract one table; raises :class:`ElementNotFoundError` if absent."""
         found = self.tables(selector)
@@ -242,6 +255,22 @@ class Page:
     def pdf(self, path: Union[str, Path]) -> str:
         self._pw_page.pdf(path=str(path))
         return str(path)
+
+    # --------------------------------------------------------------- network
+    def observe_network(self, **filters: Any):
+        """Start observing network activity for this page.
+
+        Returns a :class:`chromebrowse.network.NetworkObserver` already attached
+        to the underlying Playwright page. The observer detaches itself when the
+        page closes; call ``observer.stop()`` to detach earlier.
+
+        Accepted filters: ``resource_types``, ``methods``, ``domains``,
+        ``url_pattern``, ``max_events``, ``redact``, ``on_event``. See
+        :class:`chromebrowse.network.NetworkObserver` for semantics.
+        """
+        from .network import NetworkObserver
+
+        return NetworkObserver(self._pw_page, **filters).start()
 
     # ------------------------------------------------------------- extraction
     def extract(
@@ -395,8 +424,19 @@ class Page:
         self._browser._context.storage_state(path=str(path))
         return str(path)
 
+    def is_closed(self) -> bool:
+        """True when the underlying Playwright page is closed or unusable."""
+        try:
+            return self._pw_page.is_closed()
+        except Exception:
+            return True
+
     def close(self) -> None:
         """Close this tab and release its wrapper from the owning browser."""
+        try:
+            self._browser.hooks.fire_page_closed(self)
+        except Exception:
+            pass
         try:
             self._pw_page.close()
         except Exception:
@@ -435,6 +475,7 @@ class Browser:
             data.update(kwargs)
             config = BrowserConfig.from_dict(data)
         self.config = config
+        self.hooks = HookSet()
         self._pw = None
         self._browser = None
         self._context = None
@@ -581,6 +622,9 @@ class Browser:
         if not self._started:
             self.start()
         assert self._context is not None
+        # Prune pages whose underlying Playwright page is already closed so a
+        # long-running browser does not accumulate dead wrappers.
+        self._pages = [p for p in self._pages if not p.is_closed()]
         pw_page = self._context.new_page()
         page = Page(self, pw_page)
         self._pages.append(page)
@@ -592,6 +636,7 @@ class Browser:
             # Test doubles and alternate Playwright-compatible implementations
             # may not expose event hooks; Page.close() still deregisters itself.
             pass
+        self.hooks.fire_page_created(page)
         return page
 
     def open(
@@ -625,6 +670,7 @@ class Browser:
             else:
                 url = "https://" + url
         start = time.perf_counter()
+        self.hooks.fire_before_navigate(page, url)
         try:
             if self.config.public_only:
                 from .security import validate_public_url
@@ -641,10 +687,13 @@ class Browser:
             page.elapsed_ms = (time.perf_counter() - start) * 1000
             page.url = ""
             page.status = None
+            self.hooks.fire_after_navigate(page, url, exc)
             raise NavigationError(f"failed to open {url!r}: {exc}") from exc
         page.elapsed_ms = (time.perf_counter() - start) * 1000
         page.url = page.current_url()
         page.status = getattr(response, "status", None) if response is not None else None
+        self.hooks.fire_after_navigate(page, url, None)
+        self.hooks.fire_response(page, page.url, page.status)
         return page
 
     def fetch(
@@ -748,7 +797,6 @@ class Browser:
             data = json.loads(state_path.read_text(encoding="utf-8"))
             if not isinstance(data, dict):
                 raise ValueError("storage state must be a JSON object")
-            cookies = data.get("cookies", [])
             origins = data.get("origins", [])
             if not isinstance(cookies, list):
                 raise ValueError("'cookies' must be a list")
@@ -773,6 +821,10 @@ class Browser:
                 stores[origin] = values
         except Exception as exc:
             raise SessionError(f"invalid storage state: {exc}") from exc
+        if not isinstance(data, dict):
+            raise SessionError(f"invalid storage state {state_path}: expected a JSON object")
+
+        cookies = data.get("cookies") or []
 
         # Do not apply a partially validated state document.
         try:
