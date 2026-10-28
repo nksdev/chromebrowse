@@ -34,8 +34,8 @@ def test_parse_text_command():
 
 
 def test_parse_fetch_flags():
-    args = build_parser().parse_args(["fetch", "https://x.test", "--json", "--html", "--links"])
-    assert args.json and args.html and args.links
+    args = build_parser().parse_args(["fetch", "https://x.test", "--json", "--html", "--links", "--markdown"])
+    assert args.json and args.html and args.links and args.markdown
 
 
 def test_parse_shot_options():
