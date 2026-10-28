@@ -11,6 +11,7 @@ from .config import BrowserConfig, platform_info, require_chromium
 from .exceptions import (
     BrowserLaunchError,
     ChromiumNotFoundError,
+    ElementInteractionError,
     ElementNotFoundError,
     NavigationError,
     SessionError,
@@ -65,16 +66,20 @@ class Element:
 
     def click(self, timeout: Optional[float] = None) -> "Page":
         try:
-            self._locator.click(timeout=timeout or self._page._timeout)
+            self._locator.click(timeout=self._page._timeout if timeout is None else timeout)
         except Exception as exc:
-            raise ElementNotFoundError(f"cannot click {self._selector!r}: {exc}") from exc
+            if exc.__class__.__name__ == "TimeoutError":
+                raise BrowserTimeoutError(f"timed out clicking {self._selector!r}: {exc}") from exc
+            raise ElementInteractionError(f"cannot click {self._selector!r}: {exc}") from exc
         return self._page
 
     def fill(self, value: str, timeout: Optional[float] = None) -> "Page":
         try:
-            self._locator.fill(value, timeout=timeout or self._page._timeout)
+            self._locator.fill(value, timeout=self._page._timeout if timeout is None else timeout)
         except Exception as exc:
-            raise ElementNotFoundError(f"cannot fill {self._selector!r}: {exc}") from exc
+            if exc.__class__.__name__ == "TimeoutError":
+                raise BrowserTimeoutError(f"timed out filling {self._selector!r}: {exc}") from exc
+            raise ElementInteractionError(f"cannot fill {self._selector!r}: {exc}") from exc
         return self._page
 
     def type_text(self, value: str, delay: float = 0.0) -> "Page":
@@ -251,7 +256,7 @@ class Page:
 
     def wait_for(self, selector: str, state: str = "visible", timeout: Optional[float] = None) -> "Page":
         try:
-            self._pw_page.wait_for_selector(selector, state=state, timeout=timeout or self._timeout)
+            self._pw_page.wait_for_selector(selector, state=state, timeout=self._timeout if timeout is None else timeout)
         except Exception as exc:
             raise BrowserTimeoutError(f"timeout waiting for {selector!r} ({state}): {exc}") from exc
         return self
