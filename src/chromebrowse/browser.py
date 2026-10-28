@@ -515,8 +515,18 @@ class Browser:
     ) -> Page:
         if not self._started:
             self.start()
-        page = page or self.new_page()
-        return self._navigate(page, url, wait_until=wait_until, timeout=timeout)
+        created_page = page is None
+        target_page = page if page is not None else self.new_page()
+        try:
+            return self._navigate(
+                target_page, url, wait_until=wait_until, timeout=timeout
+            )
+        except Exception:
+            # One-shot calls create their own page. Do not leak it when
+            # navigation fails, but preserve caller-owned pages for recovery.
+            if created_page:
+                target_page.close()
+            raise
 
     navigate = open
 
