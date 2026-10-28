@@ -59,32 +59,39 @@ chromebrowse install
 This places Chromium in `./.browsers` (or `--dir PATH`) so the package is
 fully self-contained and never depends on a system browser.
 
-### Automatic download (optional)
+### Automatic download
 
-Prefer zero setup? Let `chromebrowse` fetch Chromium the first time it needs
-one. It asks for confirmation before downloading:
+Zero setup by default. If no Chromium is found, `chromebrowse` downloads one
+silently and continues — no prompt, no extra command:
 
 
-from chromebrowse import Browser, BrowserConfig
+from chromebrowse import Browser
 
-# Ask once, then download and launch in one step
-with Browser(BrowserConfig(auto_install=True)) as b:
+# First run: Chromium is fetched automatically, then the page opens
+with Browser() as b:
     print(b.open("https://example.com").title)
 
 
-On the command line the same flow runs automatically the first time a
-browsing command finds no Chromium — it prompts `Download it now? [Y/n]` and
-installs, then continues with your original request.
+The CLI behaves the same way — `chromebrowse text https://example.com` on a
+fresh machine downloads Chromium once, then returns the page text.
 
 | Setting | Default | Meaning |
 |---|---|---|
-| `auto_install` | `False` | Download Chromium when none is found |
-| `prompt_install` | `True` | Ask for confirmation first (skipped when non-interactive) |
+| `auto_install` | `True` | Download Chromium when none is found |
+| `prompt_install` | `False` | Ask before downloading (off = silent) |
 | `install_dir` | auto-detected | Where to place the download |
 
-Set `CHROMEBROWSE_BROWSERS_DIR` to pin the download location. In CI, use
-`chromebrowse install --dir .browsers` explicitly so network access stays
-predictable.
+Want control instead? Turn it off and download explicitly:
+
+
+with Browser(BrowserConfig(auto_install=False)) as b:
+    ...
+
+
+chromebrowse install --dir .browsers   # explicit, CI-friendly
+
+
+Set `CHROMEBROWSE_BROWSERS_DIR` to pin the download location.
 
 ### How Chromium is located
 

@@ -225,13 +225,19 @@ def install_chromium(
         )
 
     # Make the fresh install discoverable for the rest of this process.
-    os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", str(target))
-    exe = find_chromium()
-    if not exe:
-        raise ChromiumNotFoundError(
-            f"Chromium downloaded to {target} but no executable was found there."
-        )
-    return exe
+    os.environ["PLAYWRIGHT_BROWSERS_PATH"] = str(target)
+
+    # Look only inside ``target`` so a stale copy elsewhere cannot mask it.
+    for browser_dir in sorted(
+        [d for d in target.glob("chromium-*") if d.is_dir()], reverse=True
+    ):
+        exe = _executable_in(browser_dir)
+        if exe:
+            return str(exe)
+
+    raise ChromiumNotFoundError(
+        f"Chromium downloaded to {target} but no executable was found there."
+    )
 
 
 @dataclass
@@ -257,9 +263,9 @@ class BrowserConfig:
     slow_mo: float = 0.0
     args: List[str] = field(default_factory=list)
     downloads_path: Optional[str] = None
-    auto_install: bool = False  # download Chromium on first launch if missing
+    auto_install: bool = True  # download Chromium on first launch if missing
     install_dir: Optional[str] = None  # where auto_install places Chromium
-    prompt_install: bool = True  # ask before downloading when interactive
+    prompt_install: bool = False  # ask before downloading (off: download silently)
 
     def resolve_executable(self) -> Optional[str]:
         if self.executable_path:

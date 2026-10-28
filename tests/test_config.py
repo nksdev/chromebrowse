@@ -87,10 +87,10 @@ def test_require_chromium_returns_path_when_found(monkeypatch, tmp_path):
     assert require_chromium() == str(fake)
 
 
-def test_auto_install_defaults_off():
+def test_auto_install_defaults_on_and_silent():
     cfg = BrowserConfig()
-    assert cfg.auto_install is False
-    assert cfg.prompt_install is True
+    assert cfg.auto_install is True
+    assert cfg.prompt_install is False
     assert cfg.install_dir is None
 
 
@@ -123,7 +123,11 @@ def test_install_chromium_creates_target_dir(monkeypatch, tmp_path):
 
     target = tmp_path / "nested" / "browsers"
     monkeypatch.setattr(subprocess, "run", lambda *a, **k: FakeResult())
-    monkeypatch.setattr("chromebrowse.config.find_chromium", lambda: "/fake/chrome")
+    # Simulate the installer having produced a real layout.
+    exe_path = target / "chromium-9999" / "chrome-linux" / "chrome"
+    exe_path.parent.mkdir(parents=True)
+    exe_path.write_text("#!/bin/sh\n")
+    monkeypatch.setattr("chromebrowse.config.platform.system", lambda: "Linux")
     exe = install_chromium(target, quiet=True)
-    assert exe == "/fake/chrome"
+    assert exe == str(exe_path)
     assert target.is_dir()
