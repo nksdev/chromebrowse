@@ -36,9 +36,9 @@ dev = ["pytest>=7", "pytest-asyncio>=0.23"]
 chromebrowse = "chromebrowse.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/your-org/chromebrowse"
-Repository = "https://github.com/your-org/chromebrowse"
-Issues = "https://github.com/your-org/chromebrowse/issues"
+Homepage = "https://github.com/nksdev/chromebrowse"
+Repository = "https://github.com/nksdev/chromebrowse"
+Issues = "https://github.com/nksdev/chromebrowse/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]
