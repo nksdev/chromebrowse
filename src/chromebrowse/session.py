@@ -50,6 +50,36 @@ def _default_state_dir() -> Path:
 DEFAULT_STATE_DIR = _default_state_dir()
 
 
+def _restrict_permissions(path: Path) -> None:
+    """Best-effort ``chmod 0600`` on a state file holding credentials."""
+    import os
+    import stat
+
+    try:
+        os.chmod(path, stat.S_IRUSR | stat.S_IWUSR)
+    except (OSError, NotImplementedError):
+        # Windows and some network filesystems do not support POSIX modes.
+        pass
+
+
+def _local_storage_seed_script(origin: str, items: List[Dict[str, Any]]) -> str:
+    """Build an init script that repopulates localStorage for one origin.
+
+    ``add_init_script`` runs in every frame before page scripts, so the guard
+    on ``location.origin`` keeps each origin's data isolated.
+    """
+    payload = json.dumps({i.get("name"): i.get("value") for i in items})
+    return (
+        "(() => {\n"
+        f"  if (window.location.origin !== {json.dumps(origin)}) return;\n"
+        f"  const data = {payload};\n"
+        "  for (const [k, v] of Object.entries(data)) {\n"
+        "    try { window.localStorage.setItem(k, v); } catch (e) {}\n"
+        "  }\n"
+        "})();"
+    )
+
+
 class Session:
     """A named, persistable browsing session.
 
@@ -115,11 +145,22 @@ class Session:
         return self
 
     def _load_state_file(self, path: Path) -> None:
+        """Restore a full Playwright storage state (cookies *and* origins).
+
+        Playwright's storage state is a superset of cookies: it also carries
+        per-origin ``localStorage`` snapshots, which many modern sites use for
+        auth tokens.  Applying only ``cookies`` silently logs the user out on
+        those sites, so both sections are restored here.
+        """
         assert self._browser is not None
         try:
             data = json.loads(path.read_text("utf-8"))
         except Exception as exc:
             raise SessionError(f"cannot read state {path}: {exc}") from exc
+
+        if not isinstance(data, dict):
+            raise SessionError(f"invalid state {path}: expected a JSON object")
+
         cookies = data.get("cookies") or []
         if cookies:
             try:
@@ -127,11 +168,31 @@ class Session:
             except Exception as exc:
                 raise SessionError(f"cannot apply cookies: {exc}") from exc
 
+        for origin in data.get("origins") or []:
+            origin_url = origin.get("origin")
+            items = origin.get("localStorage") or []
+            if not origin_url or not items:
+                continue
+            try:
+                # Seed localStorage before the page's own scripts run.
+                self._browser.context.add_init_script(
+                    script=_local_storage_seed_script(origin_url, items)
+                )
+            except Exception as exc:
+                raise SessionError(
+                    f"cannot restore localStorage for {origin_url}: {exc}"
+                ) from exc
+
     def save(self) -> str:
-        """Persist cookies + localStorage to the session state file."""
+        """Persist cookies + localStorage to the session state file.
+
+        The file contains live authentication material, so it is written with
+        owner-only permissions (``0600``) on POSIX systems.
+        """
         assert self._browser is not None, "session not started"
         self.state_dir.mkdir(parents=True, exist_ok=True)
         self._browser.context.storage_state(path=str(self.state_path))
+        _restrict_permissions(self.state_path)
         return str(self.state_path)
 
     def clear(self) -> None:
@@ -161,11 +222,20 @@ class Session:
         self._page = self.browser.open(url, page=self._page, **kwargs)
         return self._page
 
-    def fetch(self, url: str, **kwargs: Any):
-        return self.open(url, **kwargs).extract(
-            include_html=kwargs.pop("include_html", False),
-            include_links=kwargs.pop("include_links", False),
-        )
+    def fetch(
+        self,
+        url: str,
+        include_html: bool = False,
+        include_links: bool = False,
+        **kwargs: Any,
+    ):
+        """Navigate and extract in one call.
+
+        Extraction flags are named parameters rather than ``kwargs`` so they
+        cannot leak into the navigation call.
+        """
+        page = self.open(url, **kwargs)
+        return page.extract(include_html=include_html, include_links=include_links)
 
     def cookies(self) -> List[Dict[str, Any]]:
         return self.browser.context.cookies()

@@ -17,7 +17,13 @@ from .exceptions import (
     TimeoutError as BrowserTimeoutError,
 )
 from .models import Link, PageContent, Snapshot
-from .extract import EXTRACT_LINKS_JS, EXTRACT_TEXT_JS, EXTRACT_META_JS, html_to_text
+from .extract import (
+    EXTRACT_LINKS_JS,
+    EXTRACT_META_JS,
+    EXTRACT_TEXT_JS,
+    html_to_markdown,
+    html_to_text,
+)
 
 Selector = str
 LoadState = str  # "load" | "domcontentloaded" | "networkidle" | "commit"
@@ -148,7 +154,7 @@ class Page:
         return self.content()
 
     def markdown(self) -> str:
-        return html_to_text(self.content())
+        return html_to_markdown(self.content())
 
     def links(self, absolute: bool = True) -> List[Link]:
         raw = self._pw_page.evaluate(EXTRACT_LINKS_JS) or []

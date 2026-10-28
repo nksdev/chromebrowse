@@ -8,7 +8,7 @@ import shutil
 import sys
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from .exceptions import ChromiumNotFoundError
 
@@ -266,6 +266,32 @@ class BrowserConfig:
     auto_install: bool = True  # download Chromium on first launch if missing
     install_dir: Optional[str] = None  # where auto_install places Chromium
     prompt_install: bool = False  # ask before downloading (off: download silently)
+
+    def __post_init__(self) -> None:
+        """Validate configuration values early, with actionable messages.
+
+        Values are checked at construction time so a misconfigured browser
+        fails with a clear error instead of an opaque Playwright exception.
+        """
+        if self.viewport_width <= 0 or self.viewport_height <= 0:
+            raise ValueError(
+                "viewport_width and viewport_height must be positive integers, "
+                f"got {self.viewport_width}x{self.viewport_height}"
+            )
+        if self.default_timeout <= 0:
+            raise ValueError(
+                f"default_timeout must be > 0 milliseconds, got {self.default_timeout!r}"
+            )
+        if self.navigation_timeout <= 0:
+            raise ValueError(
+                f"navigation_timeout must be > 0 milliseconds, got {self.navigation_timeout!r}"
+            )
+        if self.slow_mo < 0:
+            raise ValueError(f"slow_mo must be >= 0 milliseconds, got {self.slow_mo!r}")
+        if not isinstance(self.extra_headers, dict):
+            raise TypeError("extra_headers must be a dict of str -> str")
+        if not isinstance(self.block_resources, list):
+            raise TypeError("block_resources must be a list of Playwright resource types")
 
     def resolve_executable(self) -> Optional[str]:
         if self.executable_path:
