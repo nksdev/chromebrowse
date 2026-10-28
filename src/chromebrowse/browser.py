@@ -797,6 +797,7 @@ class Browser:
             data = json.loads(state_path.read_text(encoding="utf-8"))
             if not isinstance(data, dict):
                 raise ValueError("storage state must be a JSON object")
+            cookies = data.get("cookies", [])
             origins = data.get("origins", [])
             if not isinstance(cookies, list):
                 raise ValueError("'cookies' must be a list")

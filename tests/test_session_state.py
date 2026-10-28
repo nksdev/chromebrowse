@@ -75,4 +75,4 @@ def test_fetch_does_not_leak_extraction_flags(tmp_path):
 
     assert out == "CONTENT"
     mock_open.assert_called_once_with("https://x", wait_until="load")
-    page.extract.assert_called_once_with(include_html=True, include_links=True)
+    page.extract.assert_called_once_with(include_html=True, include_links=True, include_markdown=False)
