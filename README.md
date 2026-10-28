@@ -163,6 +163,8 @@ background daemon, and no configuration file required.
 > **Important for servers:** create **one** `Browser` when your app starts and
 > reuse it for every request. Launching a browser costs ~300 ms and a few
 > hundred MB, so doing it per request will not scale.
+
+> **Security warning:** the `/read?url=...` example below is a minimal demonstration, not a production-safe public endpoint. Do not expose arbitrary URL browsing to untrusted callers without a deliberate SSRF defense. Enforce HTTP/HTTPS-only schemes, validate every redirect and resolved address, block loopback/private/link-local/reserved IP ranges, and apply network-level egress restrictions to defend against DNS rebinding and browser subresource requests. Prefer an allowlist of permitted destinations.
 ---
 
 ## Five real-world examples
