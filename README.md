@@ -438,7 +438,7 @@ chromebrowse info       # what Chromium was found, plus versions
 chromebrowse install    # download Chromium up front
 
 chromebrowse text https://example.com
-chromebrowse fetch https://example.com --json --links --html
+chromebrowse fetch https://example.com --json --links --html --markdown
 chromebrowse links https://example.com --href-only
 chromebrowse shot https://example.com page.png --full
 chromebrowse pdf https://example.com page.pdf

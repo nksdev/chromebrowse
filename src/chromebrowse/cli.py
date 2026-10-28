@@ -123,13 +123,15 @@ def cmd_fetch(args: argparse.Namespace) -> int:
             timeout=args.timeout,
             include_html=args.html,
             include_links=args.links,
+            include_markdown=args.markdown,
         )
     if args.json:
         _print_json(content.as_dict())
     else:
         if args.title:
             print(content.title)
-        print(content.text[: args.max_chars] if args.max_chars else content.text)
+        output = content.markdown if args.markdown else content.text
+        print(output[: args.max_chars] if args.max_chars else output)
     return 0
 
 
@@ -289,7 +291,7 @@ def cmd_session(args: argparse.Namespace) -> int:
             print(f"session {args.name!r}: {len(cookies)} cookie(s)")
             for cookie in cookies:
                 print(
-                    f"  {cookie.get('name')}={cookie.get('value')}\\t"
+                    f"  {cookie.get('name')}={cookie.get('value')}\t"
                     f"{cookie.get('domain', '')}"
                 )
         return 0
@@ -331,6 +333,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--json", action="store_true")
     p.add_argument("--html", action="store_true", help="include raw HTML")
     p.add_argument("--links", action="store_true", help="include links")
+    p.add_argument("--markdown", action="store_true", help="include Markdown conversion")
     p.add_argument("--title", action="store_true", help="print title first")
     p.add_argument("--max-chars", type=int, default=0)
     _add_common(p)

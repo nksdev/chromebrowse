@@ -34,8 +34,8 @@ def test_parse_text_command():
 
 
 def test_parse_fetch_flags():
-    args = build_parser().parse_args(["fetch", "https://x.test", "--json", "--html", "--links"])
-    assert args.json and args.html and args.links
+    args = build_parser().parse_args(["fetch", "https://x.test", "--json", "--html", "--links", "--markdown"])
+    assert args.json and args.html and args.links and args.markdown
 
 
 def test_parse_shot_options():
@@ -126,3 +126,34 @@ def test_session_clear_deletes_state_without_launching_browser(tmp_path, monkeyp
     assert result == 0
     assert not state_file.exists()
     assert "cleared" in capsys.readouterr().out
+
+
+
+def test_fetch_markdown_flag_prints_markdown(monkeypatch, capsys):
+    from chromebrowse import cli
+
+    class FakeContent:
+        title = "Demo"
+        text = "plain text"
+        markdown = "# Markdown"
+
+        def as_dict(self):
+            return {"text": self.text, "markdown": self.markdown}
+
+    class FakeBrowser:
+        def __init__(self, config):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            pass
+
+        def fetch(self, url, **kwargs):
+            assert kwargs["include_markdown"] is True
+            return FakeContent()
+
+    monkeypatch.setattr(cli, "Browser", FakeBrowser)
+    assert main(["fetch", "https://example.com", "--markdown"]) == 0
+    assert capsys.readouterr().out == "# Markdown\n"
