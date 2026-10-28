@@ -83,7 +83,7 @@ def cmd_info(args: argparse.Namespace) -> int:
 
 
 def cmd_install(args: argparse.Namespace) -> int:
-    """Download Chromium into a project-local .browsers directory."""
+    """Download Chromium into the configured browser cache directory."""
     from .config import default_install_dir, install_chromium
 
     target = Path(args.dir).expanduser().resolve() if args.dir else default_install_dir()

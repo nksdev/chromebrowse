@@ -70,25 +70,38 @@ Everything below is one import away:
 
 ## Install
 
+Until a PyPI release is published, install the current GitHub version:
+
 ```bash
-pip install chromebrowse
+python -m pip install "git+https://github.com/nksdev/chromebrowse.git"
 ```
 
-Verify it works end to end:
+After the package is published to PyPI, the shorter command will be available:
 
 ```bash
+python -m pip install chromebrowse
+```
+
+Verify the installation:
+
+```bash
+python -m chromebrowse --version
+chromebrowse info
 python -c "from chromebrowse import Browser; b=Browser(); print(b.open('https://example.com').title); b.close()"
 # Example Domain
 ```
 
-**Requirements:** Python 3.9 or newer on macOS, Windows, or Linux. No browser
-needs to be installed beforehand.
+**Requirements:** Python 3.9 or newer on macOS, Windows, or Linux. Chromium is
+downloaded on first use if no compatible browser is found and auto-install is
+enabled.
 
 ### What happens on first run
 
-The first time you open a page, chromebrowse downloads Chromium for you
-(~185 MB, once, into ./.browsers). You will see a progress bar. Every run
-after that starts instantly.
+The first time you launch a browser, chromebrowse downloads Chromium if needed
+(roughly 150–200 MB, depending on platform). By default it stores the browser
+under `~/.chromebrowse/browsers` on a writable home directory. Set
+`CHROMEBROWSE_BROWSERS_DIR` to choose a different download directory. If an
+existing `.browsers` directory is found near the package, it may be reused.
 
 ### Download Chromium up front instead
 
@@ -96,7 +109,7 @@ Better for Docker images and CI, where you want the download at build time
 rather than during the first request:
 
 ```bash
-chromebrowse install                      # into ./.browsers
+chromebrowse install                      # into the default browser cache
 chromebrowse install --dir /opt/browsers   # into a specific folder
 chromebrowse install --force               # re-download even if present
 ```
@@ -109,7 +122,7 @@ binary:
 ```bash
 chromebrowse install --dir ./browsers
 # copy ./browsers to the target machine, then:
-export CHROMEBROWSE_CHROMIUM=/path/to/browsers/chromium-*/chrome-*/chrome
+export CHROMEBROWSE_CHROMIUM=/exact/path/printed/by/chromebrowse-install
 ```
 
 ### Opting out of the automatic download
@@ -129,25 +142,22 @@ You will then get ChromiumNotFoundError if no browser is present.
 chromebrowse is an ordinary dependency. Pick whichever file your project already uses:
 
 ```bash
-# requirements.txt
-echo "chromebrowse>=0.1.0" >> requirements.txt
+# requirements.txt (until the PyPI release exists)
+echo 'chromebrowse @ git+https://github.com/nksdev/chromebrowse.git' >> requirements.txt
 
-# Poetry
-poetry add chromebrowse
-
-# uv
-uv add chromebrowse
-
-# pipenv
-pipenv install chromebrowse
+# Install directly with pip
+python -m pip install "git+https://github.com/nksdev/chromebrowse.git"
 ```
 
-Or in `pyproject.toml`:
+Once the PyPI release is published, you can use `poetry add chromebrowse`,
+`uv add chromebrowse`, or `pipenv install chromebrowse`.
+
+For a project using `pyproject.toml` before PyPI publication:
 
 ```toml
 [project]
 dependencies = [
-    "chromebrowse>=0.1.0",
+    "chromebrowse @ git+https://github.com/nksdev/chromebrowse.git",
 ]
 ```
 
