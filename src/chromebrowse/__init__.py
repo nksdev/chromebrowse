@@ -23,7 +23,7 @@ from .exceptions import (
     NavigationError,
     TimeoutError as BrowserTimeoutError,
 )
-from .models import Link, PageContent, Snapshot
+from .models import JsonLdBlock, Link, PageContent, Snapshot, Table, TableCell
 from .session import Session
 from . import extract
 
@@ -42,6 +42,9 @@ __all__ = [
     "Link",
     "PageContent",
     "Snapshot",
+    "Table",
+    "TableCell",
+    "JsonLdBlock",
     "extract",
     "__version__",
 ]
