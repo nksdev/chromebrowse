@@ -72,3 +72,57 @@ def test_public_policy_rejects_unresolvable_host():
 
     with pytest.raises(PublicURLRejected, match="safely resolved"):
         validate_public_url("https://does-not-resolve.invalid/", resolver=fail)
+
+
+
+def test_router_aborts_a_request_rejected_by_public_policy(monkeypatch):
+    from chromebrowse.browser import _request_router
+
+    class FakeRoute:
+        def __init__(self):
+            self.aborted = None
+            self.continued = False
+
+        def abort(self, reason=None):
+            self.aborted = reason
+
+        def continue_(self):
+            self.continued = True
+
+    class FakeRequest:
+        url = "http://127.0.0.1/admin"
+        resource_type = "document"
+
+    def reject(_url):
+        raise PublicURLRejected("private address")
+
+    monkeypatch.setattr("chromebrowse.security.validate_public_url", reject)
+    route = FakeRoute()
+    _request_router(
+        route, FakeRequest(), public_only=True, block_images=False, blocked_types=set()
+    )
+    assert route.aborted == "blockedbyclient"
+    assert route.continued is False
+
+
+def test_public_only_rejects_file_navigation_before_playwright(monkeypatch):
+    from chromebrowse.browser import Browser, Page
+    from chromebrowse.config import BrowserConfig
+    from chromebrowse.exceptions import NavigationError
+
+    class FakePage:
+        called = False
+
+        def goto(self, *args, **kwargs):
+            self.called = True
+
+    browser = Browser(BrowserConfig(public_only=True))
+    browser.config.executable_path = "unused"
+    browser._started = True
+    fake_page = FakePage()
+    page = Page(browser, fake_page)
+
+    with pytest.raises(NavigationError):
+        browser._navigate(page, "file:///etc/passwd")
+
+    assert fake_page.called is False
