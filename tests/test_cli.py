@@ -192,3 +192,59 @@ def test_install_explicit_dir_is_honored_when_chromium_exists_elsewhere(
     assert result == 0
     assert calls == [requested_dir.resolve()]
     assert "Done. Chromium installed at:" in capsys.readouterr().out
+
+
+def test_interactive_repl_supports_history_reload_help_and_quoted_fill(monkeypatch, capsys):
+    from chromebrowse import cli
+
+    commands = iter([
+        'fill "input[name=q]" "hello world"',
+        "forward",
+        "reload",
+        "help",
+        "quit",
+    ])
+    monkeypatch.setattr("builtins.input", lambda _prompt: next(commands))
+
+    class FakePage:
+        title = "Demo"
+        fills = []
+        actions = []
+
+        def current_url(self):
+            return "https://example.com/"
+
+        def fill(self, selector, value):
+            self.fills.append((selector, value))
+
+        def go_forward(self):
+            self.actions.append("forward")
+
+        def reload(self):
+            self.actions.append("reload")
+
+    page = FakePage()
+
+    class FakeBrowser:
+        def __init__(self, config):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            pass
+
+        def open(self, url, **kwargs):
+            assert url == "https://example.com"
+            return page
+
+    monkeypatch.setattr(cli, "Browser", FakeBrowser)
+    result = main(["open", "https://example.com"])
+
+    assert result == 0
+    assert page.fills == [("input[name=q]", "hello world")]
+    assert page.actions == ["forward", "reload"]
+    output = capsys.readouterr().out
+    assert "Commands:" in output
+    assert "at https://example.com/" in output
