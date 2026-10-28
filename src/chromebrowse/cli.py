@@ -265,26 +265,42 @@ def cmd_session(args: argparse.Namespace) -> int:
         print("deleted" if ok else "not found")
         return 0 if ok else 1
     if args.action == "show":
-        with Session(args.name, state_dir=args.state_dir, persist=False, **_cfg_kwargs(args)) as s:
-            cookies = s.cookies()
+        # Inspect the persisted file directly. Starting a fresh browser here
+        # would show an empty cookie jar rather than the saved session.
+        state_file = Session(
+            args.name, state_dir=args.state_dir, persist=False
+        ).state_path
+        if not state_file.is_file():
+            print(f"session {args.name!r} not found", file=sys.stderr)
+            return 1
+        try:
+            state = json.loads(state_file.read_text(encoding="utf-8"))
+            if not isinstance(state, dict):
+                raise ValueError("storage state must be a JSON object")
+            cookies = state.get("cookies", [])
+            if not isinstance(cookies, list):
+                raise ValueError("'cookies' must be a list")
+        except (OSError, ValueError) as exc:
+            print(f"error reading session {args.name!r}: {exc}", file=sys.stderr)
+            return 1
         if args.json:
             _print_json(cookies)
         else:
             print(f"session {args.name!r}: {len(cookies)} cookie(s)")
-            for c in cookies:
-                print(f"  {c.get('name')}={c.get('value')}\t{c.get('domain','')}")
+            for cookie in cookies:
+                print(
+                    f"  {cookie.get('name')}={cookie.get('value')}\\t"
+                    f"{cookie.get('domain', '')}"
+                )
         return 0
     if args.action == "clear":
-        with Session(args.name, state_dir=args.state_dir, persist=False, **_cfg_kwargs(args)) as s:
-            s.clear()
-        print("cleared")
-        return 0
+        # This command is a new process, so deleting the state file is enough;
+        # don't launch Chromium merely to clear an empty in-memory context.
+        ok = delete_session(args.name, args.state_dir)
+        print("cleared" if ok else "not found")
+        return 0 if ok else 1
     print("unknown session action", file=sys.stderr)
     return 2
-
-
-def _cfg_kwargs(args: argparse.Namespace) -> Dict[str, Any]:
-    return {"headless": not getattr(args, "show", False)}
 
 
 # ---------------------------------------------------------------------- parser
