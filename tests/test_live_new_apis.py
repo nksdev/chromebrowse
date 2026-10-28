@@ -29,8 +29,8 @@ TABLE_HTML = (
 JSONLD_HTML = (
     '<html><head>'
     '<script type=application/ld+json>'
-    '{&quot;@type&quot;: &quot;Article&quot;, &quot;name&quot;: &quot;x&quot;}'
-    '</script>'
+    '{"@type": "Article", "name": "x"}'
+    '</script>
     '<script type=application/ld+json>{not json</script>'
     '</head><body>hi</body></html>'
 )
@@ -86,12 +86,16 @@ def test_hooks_fire_on_navigate(browser):
         browser.hooks = previous
 
 
-def test_observe_network_records_document(browser):
+def test_observe_network_records_document(browser, tmp_path):
+    html = tmp_path / 'net.html'
+    html.write_text('<html><body>net</body></html>', encoding='utf-8')
     page = browser.new_page()
     observer = page.observe_network(max_events=50)
-    page.goto(data_url('<html><body>net</body></html>'))
-    urls = [r.url for r in observer.requests()]
-    assert any(u.startswith('data:') for u in urls)
+    page.goto(html.as_uri())
+    events = observer.events
+    assert events, 'no events recorded'
+    assert any(e.url.startswith('file:') for e in events)
+    assert any(e.kind == 'request' for e in events)
     assert observer.dropped == 0
     observer.stop()
     observer.stop()
