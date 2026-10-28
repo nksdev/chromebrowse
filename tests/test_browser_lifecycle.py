@@ -196,3 +196,36 @@ def test_wait_methods_preserve_zero_timeout():
     page.wait_for_load("load", timeout=0)
 
     assert fake.timeouts == [0, 0]
+
+
+
+def test_external_playwright_page_close_deregisters_wrapper():
+    browser = Browser()
+    browser._started = True
+
+    class FakeContext:
+        def new_page(self):
+            return FakePlaywrightPageWithEvents()
+
+    class FakePlaywrightPageWithEvents(FakePlaywrightPage):
+        def __init__(self):
+            super().__init__()
+            self.handlers = {}
+
+        def on(self, event, callback):
+            self.handlers[event] = callback
+
+        def close(self):
+            self.closed = True
+            callback = self.handlers.get("close")
+            if callback:
+                callback()
+
+    browser._context = FakeContext()
+    page = browser.new_page()
+    assert page in browser._pages
+
+    # Simulate a close initiated by the underlying Playwright page itself.
+    page._pw_page.close()
+
+    assert page not in browser._pages
