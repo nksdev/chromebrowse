@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from html.parser import HTMLParser
-from typing import List
+from typing import Any, List
 
 # Extract readable text from a rendered document (runs in the browser).
 EXTRACT_TEXT_JS = r"""
@@ -150,3 +150,119 @@ def html_to_markdown(html: str) -> str:
     s = re.sub(r"[ \t]+", " ", s)
     s = re.sub(r"\n{3,}", "\n\n", s)
     return s.strip()
+
+
+# Collect tables with cell spans, captions, and header detection (browser).
+EXTRACT_TABLES_JS = r"""
+() => {
+  const out = [];
+  const tables = document.querySelectorAll('table');
+  tables.forEach((table, index) => {
+    const caption = table.caption ? (table.caption.innerText || '').trim() : '';
+    const rows = [];
+    const headers = [];
+    let columns = 0;
+    for (const tr of table.querySelectorAll('tr')) {
+      const cells = [];
+      for (const cell of tr.querySelectorAll('th,td')) {
+        const text = (cell.innerText || cell.textContent || '').replace(/\s+/g, ' ').trim();
+        const header = cell.tagName.toUpperCase() === 'TH';
+        cells.push({
+          text: text,
+          header: header,
+          colspan: parseInt(cell.getAttribute('colspan') || '1', 10) || 1,
+          rowspan: parseInt(cell.getAttribute('rowspan') || '1', 10) || 1,
+        });
+        if (header && rows.length === 0) headers.push(text);
+      }
+      if (cells.length) {
+        rows.push(cells);
+        columns = Math.max(columns, cells.length);
+      }
+    }
+    out.push({ index: index, caption: caption, headers: headers, rows: rows, columns: columns });
+  });
+  return out;
+}
+"""
+
+# Collect raw application/ld+json script text (browser).
+EXTRACT_JSONLD_JS = r"""
+() => {
+  const out = [];
+  const scripts = document.querySelectorAll('script[type="application/ld+json"]');
+  scripts.forEach((script, index) => {
+    out.push({ index: index, text: script.textContent || '' });
+  });
+  return out;
+}
+"""
+
+
+def tables_from_raw(raw: Any) -> List[Any]:
+    """Build ``Table`` models from raw dicts returned by ``EXTRACT_TABLES_JS``.
+
+    Missing keys are tolerated so a partially-supported browser or an older
+    cached page cannot crash extraction.
+    """
+    from .models import Table, TableCell
+
+    if not raw:
+        return []
+    tables: List[Table] = []
+    for entry in raw:
+        if not isinstance(entry, dict):
+            continue
+        rows: List[List[TableCell]] = []
+        for row in entry.get("rows") or []:
+            cells: List[TableCell] = []
+            for cell in row or []:
+                if not isinstance(cell, dict):
+                    continue
+                cells.append(
+                    TableCell(
+                        text=str(cell.get("text") or ""),
+                        header=bool(cell.get("header")),
+                        colspan=int(cell.get("colspan") or 1),
+                        rowspan=int(cell.get("rowspan") or 1),
+                    )
+                )
+            rows.append(cells)
+        tables.append(
+            Table(
+                index=int(entry.get("index") or 0),
+                caption=str(entry.get("caption") or ""),
+                headers=[str(h) for h in (entry.get("headers") or [])],
+                rows=rows,
+                columns=int(entry.get("columns") or 0),
+            )
+        )
+    return tables
+
+
+def parse_jsonld(raw: Any) -> List[Any]:
+    """Parse raw ``application/ld+json`` blocks into ``JsonLdBlock`` models.
+
+    Each block is parsed independently: one malformed block is recorded with
+    ``error`` set and does not discard the page's other structured data.
+    Blank blocks are skipped entirely.
+    """
+    import json as _json
+
+    from .models import JsonLdBlock
+
+    if not raw:
+        return []
+    blocks: List[JsonLdBlock] = []
+    for entry in raw:
+        if not isinstance(entry, dict):
+            continue
+        text = (entry.get("text") or "").strip()
+        if not text:
+            continue
+        index = int(entry.get("index") or 0)
+        try:
+            blocks.append(JsonLdBlock(index=index, data=_json.loads(text)))
+        except Exception as exc:
+            blocks.append(JsonLdBlock(index=index, data=None, error=str(exc)))
+    return blocks

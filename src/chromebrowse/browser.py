@@ -16,7 +16,7 @@ from .exceptions import (
     SessionError,
     TimeoutError as BrowserTimeoutError,
 )
-from .models import Link, PageContent, Snapshot
+from .models import JsonLdBlock, Link, PageContent, Snapshot, Table
 from .extract import (
     EXTRACT_LINKS_JS,
     EXTRACT_META_JS,
@@ -175,6 +175,26 @@ class Page:
 
     def meta(self) -> Dict[str, str]:
         return self._pw_page.evaluate(EXTRACT_META_JS) or {}
+
+    def tables(self) -> List["Table"]:
+        """Extract every ``<table>`` on the page as structured models.
+
+        Cell text is whitespace-collapsed, ``colspan``/``rowspan`` are kept,
+        and a leading row of ``<th>`` cells is reported as ``headers``.
+        """
+        from .extract import EXTRACT_TABLES_JS, tables_from_raw
+
+        return tables_from_raw(self._pw_page.evaluate(EXTRACT_TABLES_JS) or [])
+
+    def jsonld(self) -> List["JsonLdBlock"]:
+        """Parse every ``application/ld+json`` block on the page.
+
+        Each block is parsed independently: a malformed block carries its
+        error instead of discarding the page's remaining structured data.
+        """
+        from .extract import EXTRACT_JSONLD_JS, parse_jsonld
+
+        return parse_jsonld(self._pw_page.evaluate(EXTRACT_JSONLD_JS) or [])
 
     def snapshot(
         self,
