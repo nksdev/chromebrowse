@@ -156,4 +156,4 @@ def test_fetch_markdown_flag_prints_markdown(monkeypatch, capsys):
 
     monkeypatch.setattr(cli, "Browser", FakeBrowser)
     assert main(["fetch", "https://example.com", "--markdown"]) == 0
-    assert capsys.readouterr().out == "# Markdown\\n"
+    assert capsys.readouterr().out == "# Markdown\n"
