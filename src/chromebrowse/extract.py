@@ -115,9 +115,9 @@ class _TextExtractor(HTMLParser):
     def get_text(self) -> str:
         raw = "".join(self.parts)
         # Collapse horizontal whitespace but preserve paragraph/list boundaries.
-        raw = re.sub(r"[ \\t\\f\\v]+", " ", raw)
-        raw = re.sub(r" *\\n *", "\\n", raw)
-        raw = re.sub(r"\\n{3,}", "\\n\\n", raw)
+        raw = re.sub(r"[ \t\f\v]+", " ", raw)
+        raw = re.sub(r" *\n *", "\n", raw)
+        raw = re.sub(r"\n{3,}", "\n\n", raw)
         return raw.strip()
 
 
