@@ -611,10 +611,11 @@ to a non-global IP address. It is disabled by default to preserve authorized
 pentesting and local/private lab workflows.
 
 **This policy alone does not guarantee SSRF protection.** DNS may change between
-validation and Chromium's connection. Deployments accepting untrusted URLs must
-also enforce network-level egress controls and should use an allowlist whenever
-possible. The `public_only` flag is not a replacement for firewall or proxy
-isolation.
+validation and Chromium's connection, and ordinary Playwright route interception
+does not cover every browser networking mechanism (including WebSocket traffic).
+Deployments accepting untrusted URLs must also enforce network-level egress
+controls and should use an allowlist whenever possible. The `public_only` flag
+is not a replacement for firewall or proxy isolation.
 
 ## How Chromium is found
 
