@@ -8,17 +8,17 @@ import shutil
 import sys
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from .exceptions import ChromiumNotFoundError
 
 ENV_BROWSERS_PATH = "PLAYWRIGHT_BROWSERS_PATH"
 ENV_CHROMIUM_EXECUTABLE = "CHROMEBROWSE_CHROMIUM"
 
-DEFAULT_USER_AGENT = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-    "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
-)
+# Let Playwright derive a user agent from the actual Chromium build and OS.
+# A hard-coded Windows/old-Chrome UA is misleading on macOS/Linux and drifts
+# away from the browser version shipped by Playwright.
+DEFAULT_USER_AGENT: Optional[str] = None
 
 
 def _platform_tokens() -> List[str]:
@@ -246,7 +246,7 @@ class BrowserConfig:
 
     headless: bool = True
     executable_path: Optional[str] = None
-    user_agent: str = DEFAULT_USER_AGENT
+    user_agent: Optional[str] = DEFAULT_USER_AGENT
     viewport_width: int = 1280
     viewport_height: int = 800
     locale: str = "en-US"
@@ -300,8 +300,9 @@ class BrowserConfig:
         }
         if self.timezone:
             kwargs["timezone_id"] = self.timezone
-        if self.proxy:
-            kwargs["proxy"] = {"server": self.proxy}
+        # Proxy is configured at BrowserType.launch / launch_persistent_context.
+        # Duplicating it here makes launch_persistent_context receive the same
+        # keyword twice and fail before Chromium starts.
         return {k: v for k, v in kwargs.items() if v is not None}
 
     def as_dict(self) -> Dict[str, Any]:

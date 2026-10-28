@@ -217,3 +217,23 @@ def test_session_start_resets_browser_after_launch_failure(tmp_path, monkeypatch
 
     assert session._browser is None
     assert instances[0].closed is True
+
+
+
+def test_session_close_resets_state_when_browser_close_raises(monkeypatch):
+    from chromebrowse.session import Session
+
+    class BrokenCloseBrowser:
+        def close(self):
+            raise RuntimeError("close failed")
+
+    session = Session(persist=False)
+    session._browser = BrokenCloseBrowser()
+    session._page = object()
+
+    with pytest.raises(RuntimeError, match="close failed"):
+        session.close()
+
+    assert session._browser is None
+    assert session._page is None
+    assert session._skip_save_on_close is False

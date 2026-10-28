@@ -405,23 +405,18 @@ class Browser:
                 self._context = self._browser.new_context(**self.config.context_kwargs())
             self._context.set_default_timeout(self.config.default_timeout)
             self._context.set_default_navigation_timeout(self.config.navigation_timeout)
-            if self.config.public_only:
+            if self.config.public_only or self.config.block_images or self.config.block_resources:
                 blocked = set(self.config.block_resources)
                 self._context.route(
                     "**/*",
                     lambda route, req: _request_router(
                         route,
                         req,
-                        public_only=True,
+                        public_only=self.config.public_only,
                         block_images=self.config.block_images,
                         blocked_types=blocked,
                     ),
                 )
-            elif self.config.block_images:
-                self._context.route("**/*", _block_images_router)
-            elif self.config.block_resources:
-                blocked = set(self.config.block_resources)
-                self._context.route("**/*", lambda route, req: _block_types_router(route, req, blocked))
         except Exception as exc:
             self._safe_stop()
             raise BrowserLaunchError(f"failed to launch Chromium: {exc}") from exc
@@ -521,6 +516,14 @@ class Browser:
         pw_page = self._context.new_page()
         page = Page(self, pw_page)
         self._pages.append(page)
+        # Keep the registry correct even if the tab is closed outside this
+        # wrapper (for example through a page-close button or Playwright API).
+        try:
+            pw_page.on("close", lambda: self._forget_page(page))
+        except Exception:
+            # Test doubles and alternate Playwright-compatible implementations
+            # may not expose event hooks; Page.close() still deregisters itself.
+            pass
         return page
 
     def open(

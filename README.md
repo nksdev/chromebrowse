@@ -187,6 +187,10 @@ The synchronous Playwright API must be used from the thread that created it. Thi
 example confines browser startup, requests, and shutdown to a single worker
 thread. That keeps the example thread-safe, but requests are serialized. For
 higher concurrency, build this service around Playwright's async API instead.
+This is a demonstration, not a complete public-service deployment: add
+authentication, rate limiting, request quotas, and operational monitoring before
+exposing an endpoint to untrusted callers. `public_only=True` is not a substitute
+for those controls or for network-level egress restrictions.
 
 ```python
 import asyncio
@@ -204,7 +208,7 @@ browser = None
 def read_page(url: str):
     page = None
     try:
-        page = browser.open(url, wait_until="domcontentloaded")
+        page = browser.open(url, wait_until="domcontentloaded", timeout=15_000)
         return {"title": page.title, "text": page.text()[:5000]}
     finally:
         if page is not None:
@@ -221,9 +225,11 @@ async def lifespan(app: FastAPI):
         )
         yield
     finally:
-        if browser is not None:
-            await loop.run_in_executor(executor, browser.close)
-        executor.shutdown(wait=True)
+        try:
+            if browser is not None:
+                await loop.run_in_executor(executor, browser.close)
+        finally:
+            executor.shutdown(wait=True)
 
 
 app = FastAPI(lifespan=lifespan)
@@ -359,7 +365,7 @@ page.click("button.submit")
 page.fill("input[name=q]", "python")
 page.press("Enter")
 page.wait_for("#results")
-page.evaluate("document.querySelectorAll(1).length")
+page.evaluate("document.querySelectorAll('p').length")
 page.scroll_to_bottom()
 
 page.snapshot("page.png", full_page=True)
@@ -553,7 +559,7 @@ config = BrowserConfig(
     viewport_height=800,
     locale="en-US",
     timezone="America/New_York",
-    user_agent=None,             # override the default UA
+    user_agent=None,             # use Playwright's Chromium-matched default
     java_script_enabled=True,    # False = faster, but no JS rendering
     block_images=False,          # True = much faster extraction
     block_resources=[],          # e.g. ["media", "font"]
@@ -611,10 +617,11 @@ to a non-global IP address. It is disabled by default to preserve authorized
 pentesting and local/private lab workflows.
 
 **This policy alone does not guarantee SSRF protection.** DNS may change between
-validation and Chromium's connection. Deployments accepting untrusted URLs must
-also enforce network-level egress controls and should use an allowlist whenever
-possible. The `public_only` flag is not a replacement for firewall or proxy
-isolation.
+validation and Chromium's connection, and ordinary Playwright route interception
+does not cover every browser networking mechanism (including WebSocket traffic).
+Deployments accepting untrusted URLs must also enforce network-level egress
+controls and should use an allowlist whenever possible. The `public_only` flag
+is not a replacement for firewall or proxy isolation.
 
 ## How Chromium is found
 

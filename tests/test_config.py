@@ -141,3 +141,24 @@ def test_public_only_is_opt_in_and_roundtrips():
     restricted = BrowserConfig.from_dict({"public_only": True})
     assert restricted.public_only is True
     assert BrowserConfig.from_dict(restricted.as_dict()).public_only is True
+
+
+
+def test_default_user_agent_uses_playwright_chromium_default():
+    cfg = BrowserConfig()
+    assert cfg.user_agent is None
+    assert "user_agent" not in cfg.context_kwargs()
+
+
+def test_proxy_is_configured_once_at_browser_launch():
+    cfg = BrowserConfig(proxy="http://127.0.0.1:8080")
+    assert cfg.to_launch_kwargs()["proxy"] == {"server": "http://127.0.0.1:8080"}
+    assert "proxy" not in cfg.context_kwargs()
+
+
+def test_install_chromium_annotation_can_be_resolved():
+    from typing import get_type_hints
+    from chromebrowse.config import install_chromium
+
+    hints = get_type_hints(install_chromium)
+    assert "target_dir" in hints
