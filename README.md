@@ -740,14 +740,37 @@ It is layered so you can extend it without touching the core:
 
 ## Development
 
+Create an environment and install the package in editable mode. This makes Python
+import the code from your local checkout, so tests exercise the source you are
+editing rather than a separately installed copy.
+
 ```bash
 python -m venv .venv
-source .venv/bin/activate          # Windows: .venv\Scripts\activate
-pip install -e ".[dev]"
-
-pytest                              # offline regression suite
-CHROMEBROWSE_LIVE=1 pytest tests/test_live.py -v   # real browser (6 tests)
+source .venv/bin/activate          # Windows: .venv\\Scripts\\activate
+python -m pip install -e ".[dev]"
 ```
+
+### Run the offline test suite
+
+These tests do not require a live website or a running Chromium browser:
+
+```bash
+python -m pytest tests/ --ignore=tests/test_live.py -v
+```
+
+### Run the live browser tests
+
+The six live integration tests launch Chromium and access `https://example.com`.
+Install Chromium first, then enable the tests explicitly:
+
+```bash
+chromebrowse install
+CHROMEBROWSE_LIVE=1 python -m pytest tests/test_live.py -v
+```
+
+The live tests are skipped by default because they require a browser binary and
+network access. The CI workflow runs offline tests and live browser tests as
+separate jobs.
 
 Runnable examples live in `examples/`:
 
@@ -757,7 +780,6 @@ python examples/form_interaction.py
 python examples/scrape_links.py
 python examples/session_login.py
 ```
-
 ---
 
 ## Publishing to PyPI
