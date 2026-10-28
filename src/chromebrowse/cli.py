@@ -209,12 +209,27 @@ def cmd_open(args: argparse.Namespace) -> int:
                 break
             if not line:
                 continue
-            parts = line.split(None, 1)
-            cmd = parts[0].lower()
-            rest = parts[1] if len(parts) > 1 else ""
+            cmd, _, rest = line.partition(" ")
+            cmd = cmd.lower()
+            rest = rest.strip()
             try:
                 if cmd in ("quit", "exit", "q"):
                     break
+                elif cmd in ("help", "?"):
+                    print("Commands:")
+                    print("  text                 show rendered text")
+                    print("  html                 show page HTML")
+                    print("  title | url          show page title or URL")
+                    print("  links                list up to 50 links")
+                    print("  goto URL             navigate to a URL")
+                    print("  back | forward       navigate history")
+                    print("  reload               reload current page")
+                    print("  click SELECTOR       click an element")
+                    print('  fill SELECTOR VALUE  fill a form field; quote values with spaces')
+                    print("  wait SELECTOR        wait for a visible element")
+                    print("  eval JAVASCRIPT      evaluate JavaScript in the page")
+                    print("  shot [FILE]          save a full-page screenshot")
+                    print("  help | quit          show help or exit")
                 elif cmd == "text":
                     print(page.text()[: args.max_chars or 2000])
                 elif cmd == "html":
@@ -225,29 +240,65 @@ def cmd_open(args: argparse.Namespace) -> int:
                     print(page.current_url())
                 elif cmd == "links":
                     for l in page.links()[:50]:
-                        print(f"{l.text}\t{l.href}")
+                        print(f"{l.text}\\t{l.href}")
                 elif cmd == "shot":
-                    print("saved", page.snapshot(path=rest or "shot.png", full_page=True).path)
+                    try:
+                        shot_args = shlex.split(rest) if rest else []
+                    except ValueError as exc:
+                        print("error:", exc)
+                        continue
+                    if len(shot_args) > 1:
+                        print("usage: shot [FILE]")
+                        continue
+                    target = shot_args[0] if shot_args else "shot.png"
+                    print("saved", page.snapshot(path=target, full_page=True).path)
                 elif cmd == "click":
+                    if not rest:
+                        print("usage: click SELECTOR")
+                        continue
                     page.click(rest)
                     print("clicked", rest)
                 elif cmd == "fill":
-                    sel, _, val = rest.partition(" ")
-                    page.fill(sel, val)
-                    print("filled", sel)
+                    try:
+                        fill_args = shlex.split(rest)
+                    except ValueError as exc:
+                        print("error:", exc)
+                        continue
+                    if len(fill_args) < 2:
+                        print('usage: fill SELECTOR "VALUE"')
+                        continue
+                    selector = fill_args[0]
+                    value = " ".join(fill_args[1:])
+                    page.fill(selector, value)
+                    print("filled", selector)
                 elif cmd == "wait":
+                    if not rest:
+                        print("usage: wait SELECTOR")
+                        continue
                     page.wait_for(rest)
                     print("ok")
                 elif cmd == "goto":
-                    page.goto(rest, wait_until=args.wait_until)
+                    if not rest:
+                        print("usage: goto URL")
+                        continue
+                    page.goto(rest, wait_until=args.wait_until, timeout=args.timeout)
                     print("at", page.current_url())
                 elif cmd == "eval":
+                    if not rest:
+                        print("usage: eval JAVASCRIPT")
+                        continue
                     print(page.evaluate(rest))
                 elif cmd == "back":
                     page.go_back()
                     print("at", page.current_url())
+                elif cmd == "forward":
+                    page.go_forward()
+                    print("at", page.current_url())
+                elif cmd == "reload":
+                    page.reload()
+                    print("at", page.current_url())
                 else:
-                    print("unknown command:", cmd)
+                    print("unknown command:", cmd, "(type help)")
             except BrowserError as exc:
                 print("error:", exc)
     return 0
