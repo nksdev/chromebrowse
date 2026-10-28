@@ -17,6 +17,7 @@ from .exceptions import (
     TimeoutError as BrowserTimeoutError,
 )
 from .models import JsonLdBlock, Link, PageContent, Snapshot, Table
+from .hooks import HookSet
 from .extract import (
     EXTRACT_LINKS_JS,
     EXTRACT_META_JS,
@@ -373,6 +374,10 @@ class Page:
     def close(self) -> None:
         """Close the page. Safe to call repeatedly and after browser shutdown."""
         try:
+            self._browser.hooks.fire_page_closed(self)
+        except Exception:
+            pass
+        try:
             self._pw_page.close()
         except Exception:
             pass
@@ -408,6 +413,7 @@ class Browser:
             data.update(kwargs)
             config = BrowserConfig.from_dict(data)
         self.config = config
+        self.hooks = HookSet()
         self._pw = None
         self._browser = None
         self._context = None
@@ -545,6 +551,7 @@ class Browser:
         pw_page = self._context.new_page()
         page = Page(self, pw_page)
         self._pages.append(page)
+        self.hooks.fire_page_created(page)
         return page
 
     def open(
@@ -569,13 +576,17 @@ class Browser:
             else:
                 url = "https://" + url
         start = time.perf_counter()
+        self.hooks.fire_before_navigate(page, url)
         try:
             response = page._pw_page.goto(url, wait_until=wait_until, timeout=timeout or self.config.navigation_timeout)
         except Exception as exc:
+            self.hooks.fire_after_navigate(page, url, exc)
             raise NavigationError(f"failed to open {url!r}: {exc}") from exc
         page.elapsed_ms = (time.perf_counter() - start) * 1000
         page.url = page.current_url()
         page.status = getattr(response, "status", None) if response is not None else None
+        self.hooks.fire_after_navigate(page, url, None)
+        self.hooks.fire_response(page, page.url, page.status)
         return page
 
     def fetch(
