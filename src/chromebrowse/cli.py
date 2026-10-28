@@ -241,7 +241,7 @@ def cmd_open(args: argparse.Namespace) -> int:
                     print(page.current_url())
                 elif cmd == "links":
                     for l in page.links()[:50]:
-                        print(f"{l.text}\\t{l.href}")
+                        print(f"{l.text}\t{l.href}")
                 elif cmd == "shot":
                     try:
                         shot_args = shlex.split(rest) if rest else []
