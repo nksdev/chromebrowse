@@ -108,3 +108,35 @@ def test_load_state_file_restores_cookies_and_local_storage(tmp_path):
     assert session.browser.context.cookies[0]["name"] == "sid"
     assert "https://example.com" in session.browser.context.script
     assert "localStorage.setItem" in session.browser.context.script
+
+
+
+def test_start_fails_and_preserves_corrupt_state_file(tmp_path, monkeypatch):
+    import pytest
+    from chromebrowse import session as session_module
+    from chromebrowse.exceptions import SessionError
+
+    state_file = tmp_path / "broken.json"
+    state_file.write_text("{not-json", encoding="utf-8")
+    instances = []
+
+    class FakeBrowser:
+        def __init__(self, config):
+            self.closed = False
+            instances.append(self)
+
+        def start(self):
+            return self
+
+        def close(self):
+            self.closed = True
+
+    monkeypatch.setattr(session_module, "Browser", FakeBrowser)
+    s = session_module.Session("broken", state_dir=tmp_path, persist=True)
+
+    with pytest.raises(SessionError):
+        s.start()
+
+    assert state_file.exists()
+    assert instances[0].closed is True
+    assert s._browser is None
