@@ -137,6 +137,59 @@ with Browser(BrowserConfig(auto_install=False)) as b:
 You will then get ChromiumNotFoundError if no browser is present.
 ---
 
+## Google Colab
+
+Google Colab runs notebook cells with an active asyncio event loop. Because
+chromebrowse currently uses Playwright's **synchronous** API, start and use the
+browser inside a worker thread rather than directly in the notebook thread.
+
+Install in a Colab cell:
+
+```python
+%pip install "git+https://github.com/nksdev/chromebrowse.git"
+```
+
+Then run the complete browser operation in one worker thread:
+
+```python
+from concurrent.futures import ThreadPoolExecutor
+from chromebrowse import Browser
+
+def read_example():
+    with Browser() as browser:
+        page = browser.open("https://example.com")
+        return {
+            "title": page.title,
+            "url": page.current_url(),
+            "text": page.text(),
+            "links": [
+                {"text": link.text, "href": link.href}
+                for link in page.links()
+            ],
+        }
+
+with ThreadPoolExecutor(max_workers=1) as executor:
+    result = executor.submit(read_example).result()
+
+print(result["title"])
+print(result["url"])
+print(result["text"])
+print(result["links"])
+```
+
+Keep **all** operations on a given `Browser` and its pages in the same worker
+thread. Do not create a browser in one thread and use or close it in another.
+Colab does not normally provide a desktop display for a visible Chromium window;
+use headless browsing and return outputs (text, JSON, screenshots, or PDFs) to
+the notebook. The runtime is temporary, so download any files you need to keep.
+
+If startup still fails, inspect the underlying Chromium/dependency error and
+install any missing Linux system libraries. This thread workaround addresses
+the active-event-loop conflict; it does not make the synchronous API an
+asynchronous API.
+
+---
+
 ## Add it to an existing project
 
 chromebrowse is an ordinary dependency. Pick whichever file your project already uses:
