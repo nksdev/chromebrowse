@@ -30,7 +30,7 @@ JSONLD_HTML = (
     '<html><head>'
     '<script type=application/ld+json>'
     '{"@type": "Article", "name": "x"}'
-    '</script>
+    '</script>'
     '<script type=application/ld+json>{not json</script>'
     '</head><body>hi</body></html>'
 )
