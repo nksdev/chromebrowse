@@ -266,6 +266,7 @@ class BrowserConfig:
     auto_install: bool = True  # download Chromium on first launch if missing
     install_dir: Optional[str] = None  # where auto_install places Chromium
     prompt_install: bool = False  # ask before downloading (off: download silently)
+    public_only: bool = False  # reject non-public HTTP(S) requests; see SSRF caveat
 
     def resolve_executable(self) -> Optional[str]:
         if self.executable_path:
