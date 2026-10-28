@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "chromebrowse"
+version = "0.1.0"
+description = "Reusable Chromium-based web browsing engine for Python: render JS pages, extract content, discover links, interact, screenshot."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "chromebrowse contributors" }]
+keywords = ["browser", "chromium", "playwright", "scraping", "automation", "headless"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: MacOS",
+  "Operating System :: Microsoft :: Windows",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Internet :: WWW/HTTP :: Browsers",
+  "Typing :: Typed",
+]
+dependencies = ["playwright>=1.40"]
+
+[project.optional-dependencies]
+dev = ["pytest>=7", "pytest-asyncio>=0.23"]
+
+[project.scripts]
+chromebrowse = "chromebrowse.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/your-org/chromebrowse"
+Repository = "https://github.com/your-org/chromebrowse"
+Issues = "https://github.com/your-org/chromebrowse/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+chromebrowse = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

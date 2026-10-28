@@ -1,0 +1,36 @@
+# Downloaded Chromium binaries (hundreds of MB) - never commit
+.browsers/
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+
+# Session state and runtime artifacts
+.chromebrowse/
+.sessions/
+*.png
+!docs/**/*.png
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
