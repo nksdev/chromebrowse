@@ -168,3 +168,27 @@ def test_cli_preserves_explicit_zero_timeout():
 
     assert config.navigation_timeout == 0
     assert config.default_timeout == 0
+
+
+
+def test_install_explicit_dir_is_honored_when_chromium_exists_elsewhere(
+    tmp_path, monkeypatch, capsys
+):
+    from chromebrowse import cli, config
+
+    requested_dir = tmp_path / "requested-browsers"
+    calls = []
+
+    monkeypatch.setattr(cli, "find_chromium", lambda: "/usr/bin/chromium")
+
+    def fake_install(target_dir, quiet=False):
+        calls.append(target_dir)
+        return str(requested_dir / "chromium" / "chrome")
+
+    monkeypatch.setattr(config, "install_chromium", fake_install)
+
+    result = main(["install", "--dir", str(requested_dir)])
+
+    assert result == 0
+    assert calls == [requested_dir.resolve()]
+    assert "Done. Chromium installed at:" in capsys.readouterr().out

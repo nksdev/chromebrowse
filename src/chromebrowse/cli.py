@@ -89,7 +89,9 @@ def cmd_install(args: argparse.Namespace) -> int:
     target = Path(args.dir).expanduser().resolve() if args.dir else default_install_dir()
 
     existing = find_chromium()
-    if existing and not args.force:
+    # An explicit --dir is a request to install into that location. A system
+    # browser or a Playwright cache elsewhere must not silently satisfy it.
+    if existing and not args.force and args.dir is None:
         print(f"Chromium already available: {existing}")
         print("Use --force to download a fresh copy anyway.")
         return 0
