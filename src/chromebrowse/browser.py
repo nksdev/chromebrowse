@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional, Sequence, Union
 from .config import BrowserConfig, platform_info, require_chromium
 from .exceptions import (
     BrowserLaunchError,
+    ChromiumNotFoundError,
     ElementNotFoundError,
     NavigationError,
     SessionError,
