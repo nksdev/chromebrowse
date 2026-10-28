@@ -18,7 +18,14 @@ from .exceptions import (
     TimeoutError as BrowserTimeoutError,
 )
 from .models import Link, PageContent, Snapshot
-from .extract import EXTRACT_LINKS_JS, EXTRACT_TEXT_JS, EXTRACT_META_JS, html_to_text, html_to_markdown
+from .extract import (
+    EXTRACT_LINKS_JS,
+    EXTRACT_META_JS,
+    EXTRACT_TABLES_JS,
+    EXTRACT_TEXT_JS,
+    html_to_markdown,
+    html_to_text,
+)
 
 Selector = str
 LoadState = str  # "load" | "domcontentloaded" | "networkidle" | "commit"
@@ -176,6 +183,41 @@ class Page:
     def meta(self) -> Dict[str, str]:
         return self._pw_page.evaluate(EXTRACT_META_JS) or {}
 
+    def tables(self, selector: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Extract HTML tables as ``{headers, rows, records}`` dictionaries.
+
+        ``records`` maps header names to cell text, which makes ``<table>``
+        content directly usable as JSON::
+
+            rows = page.tables()[0]["records"]
+        """
+        return self._pw_page.evaluate(EXTRACT_TABLES_JS, selector) or []
+
+    def table(self, selector: str) -> Dict[str, Any]:
+        """Extract one table; raises :class:`ElementNotFoundError` if absent."""
+        found = self.tables(selector)
+        if not found:
+            raise ElementNotFoundError(f"no table matches {selector!r}")
+        return found[0]
+
+    def form_values(self) -> Dict[str, str]:
+        """Return current values of named form controls on the page."""
+        return self._pw_page.evaluate(
+            """() => {
+              const out = {};
+              for (const el of document.querySelectorAll('input, select, textarea')) {
+                const name = el.getAttribute('name') || el.getAttribute('id');
+                if (!name) continue;
+                if (el.type === 'checkbox' || el.type === 'radio') {
+                  out[name] = el.checked ? (el.value || 'on') : '';
+                } else {
+                  out[name] = el.value;
+                }
+              }
+              return out;
+            }"""
+        ) or {}
+
     def snapshot(
         self,
         path: Optional[Union[str, Path]] = None,
@@ -208,6 +250,11 @@ class Page:
         include_markdown: bool = False,
         include_links: bool = False,
     ) -> PageContent:
+        """Collect page content into a :class:`PageContent`.
+
+        ``include_markdown=True`` works without ``include_html=True``: the
+        rendered HTML is fetched internally when only Markdown is requested.
+        """
         content = PageContent(
             url=self.current_url(),
             title=self.title,
@@ -215,10 +262,13 @@ class Page:
             status=self.status,
             elapsed_ms=self.elapsed_ms,
         )
+        html = ""
+        if include_html or include_markdown:
+            html = self.content()
         if include_html:
-            content.html = self.content()
+            content.html = html
         if include_markdown:
-            content.markdown = html_to_markdown(content.html or self.content())
+            content.markdown = html_to_markdown(html)
         if include_links:
             content.links = self.links()
         try:
@@ -229,9 +279,27 @@ class Page:
         return content
 
     # ------------------------------------------------------------ interaction
-    def find(self, selector: str, index: int = 0) -> Element:
+    def find(
+        self,
+        selector: str,
+        index: int = 0,
+        default: Optional[Element] = None,
+        required: bool = True,
+    ) -> Element:
+        """Return the first element matching ``selector``.
+
+        By default a missing element raises :class:`ElementNotFoundError`.
+        Pass ``required=False`` to get ``default`` (``None`` unless supplied)
+        instead of an exception::
+
+            el = page.find("h1", required=False)
+            if el is not None:
+                print(el.text())
+        """
         el = Element(self, selector, index)
         if not el._exists():
+            if not required:
+                return default  # type: ignore[return-value]
             raise ElementNotFoundError(f"no element matches {selector!r}")
         return el
 
@@ -568,6 +636,11 @@ class Browser:
                 timeout=self.config.navigation_timeout if timeout is None else timeout,
             )
         except Exception as exc:
+            # A failed navigation can leave the tab partially loaded. Reset the
+            # elapsed/url/status metadata so callers never see stale page info.
+            page.elapsed_ms = (time.perf_counter() - start) * 1000
+            page.url = ""
+            page.status = None
             raise NavigationError(f"failed to open {url!r}: {exc}") from exc
         page.elapsed_ms = (time.perf_counter() - start) * 1000
         page.url = page.current_url()
@@ -592,6 +665,49 @@ class Browser:
             )
         finally:
             page.close()
+
+    def batch(
+        self,
+        urls: Sequence[str],
+        wait_until: LoadState = "load",
+        timeout: Optional[float] = None,
+        include_html: bool = False,
+        include_links: bool = False,
+        include_markdown: bool = False,
+        on_error: str = "record",
+    ) -> List[Dict[str, Any]]:
+        """Fetch many URLs over one reused tab without aborting the batch.
+
+        Returns one dict per URL with either ``content`` (a
+        :class:`PageContent`) or ``error`` when ``on_error="record"``. Pass
+        ``on_error="raise"`` to stop at the first failure.
+        """
+        if not self._started:
+            self.start()
+        results: List[Dict[str, Any]] = []
+        page = self.new_page()
+        try:
+            for url in urls:
+                try:
+                    self._navigate(page, url, wait_until=wait_until, timeout=timeout)
+                    content = page.extract(
+                        include_html=include_html,
+                        include_links=include_links,
+                        include_markdown=include_markdown,
+                    )
+                    results.append({"url": url, "ok": True, "content": content})
+                except Exception as exc:
+                    if on_error == "raise":
+                        raise
+                    results.append({"url": url, "ok": False, "error": str(exc)})
+                    # Chromium leaves a failed tab stuck on its error page, and
+                    # that pending navigation interrupts every later goto. Drop
+                    # the tab and continue the batch in a fresh one.
+                    page.close()
+                    page = self.new_page()
+        finally:
+            page.close()
+        return results
 
     def text(self, url: str, **kwargs: Any) -> str:
         return self.fetch(url, **kwargs).text

@@ -60,12 +60,64 @@ EXTRACT_META_JS = r"""
   for (const m of document.querySelectorAll('meta')) {
     const key = m.getAttribute('name') || m.getAttribute('property') || m.getAttribute('http-equiv');
     const val = m.getAttribute('content');
-    if (key && val !== null) meta[key] = val;
+    if (key && val !== null && val !== '') meta[key] = val;
   }
   const canonical = document.querySelector('link[rel="canonical"]');
   if (canonical && canonical.href) meta['canonical'] = canonical.href;
   if (document.title) meta['title'] = document.title;
+  // Provide a consistent description even when a site only ships OG/Twitter tags.
+  if (!meta['description']) {
+    meta['description'] = meta['og:description'] || meta['twitter:description'] || '';
+  }
+  if (meta['description'] === '') delete meta['description'];
   return meta;
+}
+"""
+
+# Extract HTML tables into JSON-friendly row/column structures (runs in browser).
+EXTRACT_TABLES_JS = r"""
+(selector) => {
+  const tables = selector
+    ? Array.from(document.querySelectorAll(selector))
+    : Array.from(document.querySelectorAll('table'));
+  const clean = (s) => (s || '').replace(/\s+/g, ' ').trim();
+  return tables.map((table) => {
+    const headers = [];
+    const rows = [];
+    for (const tr of table.querySelectorAll('tr')) {
+      const cells = Array.from(tr.querySelectorAll('th, td'));
+      const isHeader = tr.querySelector('th') !== null;
+      const values = cells.map((c) => ({
+        text: clean(c.innerText || c.textContent),
+        colspan: parseInt(c.getAttribute('colspan') || '1', 10) || 1,
+        rowspan: parseInt(c.getAttribute('rowspan') || '1', 10) || 1,
+        isHeader: c.tagName.toUpperCase() === 'TH',
+      }));
+      if (!values.length) continue;
+      if (isHeader && headers.length === 0) {
+        for (const v of values) headers.push(v.text);
+      } else {
+        rows.push(values.map((v) => v.text));
+      }
+    }
+    // If no <th> row was found, treat the first row as the header when it looks
+    // like a header (all plain cells, table has more rows).
+    if (headers.length === 0 && rows.length > 1) {
+      headers.push(...rows.shift());
+    }
+    const records = rows.map((row) => {
+      const rec = {};
+      for (let i = 0; i < headers.length; i++) {
+        rec[headers[i] || ('column_' + i)] = row[i] ?? '';
+      }
+      // Preserve extra cells beyond the header width.
+      for (let i = headers.length; i < row.length; i++) {
+        rec['column_' + i] = row[i];
+      }
+      return rec;
+    });
+    return { headers, rows, records };
+  });
 }
 """
 

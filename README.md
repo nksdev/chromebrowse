@@ -59,6 +59,9 @@ Everything below is one import away:
 | Get structured data | `page.extract()` | `chromebrowse fetch URL --json` |
 | Convert to Markdown | `page.markdown()` | `chromebrowse fetch URL --json` |
 | List links | `page.links()` | `chromebrowse links URL` |
+| Extract tables as JSON | `page.tables()` | `chromebrowse fetch URL --json` |
+| Read form values | `page.form_values()` | `chromebrowse open URL` |
+| Batch many URLs | `browser.batch(urls)` | - |
 | Click, type, select | `page.click()` `page.fill()` | `chromebrowse open URL` |
 | Screenshot | `page.snapshot()` | `chromebrowse shot URL out.png` |
 | PDF | `page.pdf()` | `chromebrowse pdf URL out.pdf` |
@@ -418,11 +421,15 @@ page.html()         # raw HTML
 page.markdown()     # Markdown
 page.links()        # list of Link objects
 page.meta()         # description, og:*, canonical, ...
+page.tables()       # HTML tables as {headers, rows, records}
+page.table("#data") # one table, or ElementNotFoundError
+page.form_values()  # {name: value} for inputs, selects, textareas
 page.extract()      # PageContent with all of the above
 
-page.find("h1")     # first matching Element
-page.find_all("a")  # list of Elements
-page.exists("#cookie-bar")  # True / False
+page.find("h1")                  # first matching Element, raises if absent
+page.find("h1", required=False)  # None instead of raising
+page.find_all("a")               # list of Elements
+page.exists("#cookie-bar")       # True / False
 
 page.click("button.submit")
 page.fill("input[name=q]", "python")
@@ -510,7 +517,9 @@ chromebrowse info       # what Chromium was found, plus versions
 chromebrowse install    # download Chromium up front
 
 chromebrowse text https://example.com
-chromebrowse fetch https://example.com --json --links --html --markdown
+chromebrowse fetch https://example.com --json          # text + markdown + links + meta
+chromebrowse fetch https://example.com --json --html   # also include raw HTML
+chromebrowse fetch https://example.com --markdown      # print Markdown, not plain text
 chromebrowse links https://example.com --href-only
 chromebrowse shot https://example.com page.png --full
 chromebrowse pdf https://example.com page.pdf

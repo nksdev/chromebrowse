@@ -118,14 +118,18 @@ def cmd_text(args: argparse.Namespace) -> int:
 
 
 def cmd_fetch(args: argparse.Namespace) -> int:
+    # ``--json`` is an extraction request: include the structured extras by
+    # default instead of returning empty markdown/links unless flags are given.
+    include_links = args.links or args.json
+    include_markdown = args.markdown or args.json
     with Browser(_config_from_args(args)) as b:
         content = b.fetch(
             args.url,
             wait_until=args.wait_until,
             timeout=args.timeout,
             include_html=args.html,
-            include_links=args.links,
-            include_markdown=args.markdown,
+            include_links=include_links,
+            include_markdown=include_markdown,
         )
     if args.json:
         _print_json(content.as_dict())
