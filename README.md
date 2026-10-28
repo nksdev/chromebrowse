@@ -6,6 +6,8 @@
 
 A reusable, self-contained **Chromium browsing engine for Python**.
 
+**New to chromebrowse?** Start with the [User Guide](docs/USER_GUIDE.md) for installation, copyable integration examples, capabilities, sessions, configuration, CLI usage, and security guidance.
+
 Give any Python project the ability to reach the internet, navigate sites,
 render JavaScript pages, extract content, discover links, interact with
 elements, take screenshots, and keep a login session - through a small Python
@@ -19,6 +21,7 @@ Chromium install to manage.
 ## Contents
 
 - [Why use this](#why-use-this)
+- [User guide: use chromebrowse in your project](docs/USER_GUIDE.md)
 - [Install](#install)
 - [Add it to an existing project](#add-it-to-an-existing-project)
 - [Five real-world examples](#five-real-world-examples)
