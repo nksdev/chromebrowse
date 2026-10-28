@@ -187,6 +187,10 @@ The synchronous Playwright API must be used from the thread that created it. Thi
 example confines browser startup, requests, and shutdown to a single worker
 thread. That keeps the example thread-safe, but requests are serialized. For
 higher concurrency, build this service around Playwright's async API instead.
+This is a demonstration, not a complete public-service deployment: add
+authentication, rate limiting, request quotas, and operational monitoring before
+exposing an endpoint to untrusted callers. `public_only=True` is not a substitute
+for those controls or for network-level egress restrictions.
 
 ```python
 import asyncio
@@ -204,7 +208,7 @@ browser = None
 def read_page(url: str):
     page = None
     try:
-        page = browser.open(url, wait_until="domcontentloaded")
+        page = browser.open(url, wait_until="domcontentloaded", timeout=15_000)
         return {"title": page.title, "text": page.text()[:5000]}
     finally:
         if page is not None:
@@ -221,9 +225,11 @@ async def lifespan(app: FastAPI):
         )
         yield
     finally:
-        if browser is not None:
-            await loop.run_in_executor(executor, browser.close)
-        executor.shutdown(wait=True)
+        try:
+            if browser is not None:
+                await loop.run_in_executor(executor, browser.close)
+        finally:
+            executor.shutdown(wait=True)
 
 
 app = FastAPI(lifespan=lifespan)
