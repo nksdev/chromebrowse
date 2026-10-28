@@ -33,7 +33,7 @@ It is a convenience layer over Playwright, not a replacement for the browser eng
 
 ## What it does not do
 
-`chromebrowse` does not automatically provide a full web crawler, search engine, CAPTCHA solver, anti-bot bypass, proxy service, task scheduler, data warehouse, or an AI agent. Your application must define which sites to visit, what information to collect, and how to store or use results.
+`chromebrowse` includes an optional sequential, browser-rendered crawler, but it is not a search engine, CAPTCHA solver, anti-bot bypass, proxy service, task scheduler, data warehouse, or an AI agent. Your application must define which sites to visit, what information to collect, and how to store or use results.
 
 It does not guarantee that a website permits automated access or that every site will render identically. Login flows, bot checks, network failures, and site changes may require application-specific handling.
 
@@ -399,3 +399,42 @@ CHROMEBROWSE_LIVE=1 python -m pytest tests/test_live.py -v
 ```
 
 The live tests are skipped by default. For the latest installation commands, examples, API reference, architecture, and publishing notes, see the [main README](../README.md).
+
+
+## Network observation, structured data, and crawling
+
+The core browser API remains backward compatible: `page.tables()` returns dictionaries with headers, rows, and records. For typed table models that preserve cell metadata such as `colspan` and `rowspan`, use `page.structured_tables()`.
+
+```python
+from chromebrowse import Browser, HookSet
+from chromebrowse.crawl import Crawler
+
+with Browser() as browser:
+    browser.hooks = HookSet(
+        after_navigate=lambda page, url, error: print(url, error)
+    )
+    page = browser.open("https://example.com")
+
+    # Structured tables and JSON-LD
+    for table in page.structured_tables():
+        print(table.headers, [cell.text for cell in table.data_rows[0]])
+    for block in page.jsonld():
+        print(block.types, block.error)
+
+    # Observe browser-level request/response events (not packet capture)
+    observer = page.observe_network(resource_types={"xhr", "fetch"})
+    page.reload()
+    for response in observer.responses():
+        print(response.status, response.url)
+    observer.stop()
+
+# Optional sequential browser-rendered crawl
+result = Crawler(max_pages=20, max_depth=2, delay_seconds=0.5).crawl(
+    "https://example.com"
+)
+print(result.visited, result.failed, result.skipped_offscope)
+```
+
+The network observer has bounded event storage and redacts sensitive headers by default. It does not provide full packet capture, HAR export, or WebSocket event coverage. The crawler is sequential, browser-rendered, and bounded by its configured scope and limits; crawl scope is not authorization and is not an SSRF boundary.
+
+See [Network observation](NETWORK.md), [Crawler behavior](CRAWLING.md), [Architecture](ARCHITECTURE.md), and [Security guidance](SECURITY.md) for the module-specific API and limitations.
