@@ -1,6 +1,9 @@
 """Regression tests for browser page-wrapper lifecycle."""
 
+import pytest
+
 from chromebrowse.browser import Browser, Page
+from chromebrowse.exceptions import NavigationError
 
 
 class FakePlaywrightPage:
@@ -34,3 +37,46 @@ def test_page_close_is_idempotent():
 
     assert page not in browser._pages
     assert browser._pages == []
+
+
+def test_open_closes_new_page_when_navigation_fails(monkeypatch):
+    browser = Browser()
+    monkeypatch.setattr(browser, "start", lambda: browser)
+    playwright_page = FakePlaywrightPage()
+    page = Page(browser, playwright_page)
+    monkeypatch.setattr(browser, "new_page", lambda: _register(browser, page))
+
+    def fail_navigation(*args, **kwargs):
+        raise NavigationError("navigation failed")
+
+    monkeypatch.setattr(browser, "_navigate", fail_navigation)
+
+    with pytest.raises(NavigationError):
+        browser.open("https://example.com")
+
+    assert playwright_page.closed is True
+    assert browser._pages == []
+
+
+def test_open_preserves_caller_owned_page_when_navigation_fails(monkeypatch):
+    browser = Browser()
+    monkeypatch.setattr(browser, "start", lambda: browser)
+    playwright_page = FakePlaywrightPage()
+    page = Page(browser, playwright_page)
+    browser._pages.append(page)
+
+    def fail_navigation(*args, **kwargs):
+        raise NavigationError("navigation failed")
+
+    monkeypatch.setattr(browser, "_navigate", fail_navigation)
+
+    with pytest.raises(NavigationError):
+        browser.open("https://example.com", page=page)
+
+    assert playwright_page.closed is False
+    assert browser._pages == [page]
+
+
+def _register(browser, page):
+    browser._pages.append(page)
+    return page
