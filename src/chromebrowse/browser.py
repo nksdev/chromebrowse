@@ -521,6 +521,14 @@ class Browser:
         pw_page = self._context.new_page()
         page = Page(self, pw_page)
         self._pages.append(page)
+        # Keep the registry correct even if the tab is closed outside this
+        # wrapper (for example through a page-close button or Playwright API).
+        try:
+            pw_page.on("close", lambda: self._forget_page(page))
+        except Exception:
+            # Test doubles and alternate Playwright-compatible implementations
+            # may not expose event hooks; Page.close() still deregisters itself.
+            pass
         return page
 
     def open(
