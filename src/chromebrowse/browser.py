@@ -400,7 +400,19 @@ class Browser:
                 self._context = self._browser.new_context(**self.config.context_kwargs())
             self._context.set_default_timeout(self.config.default_timeout)
             self._context.set_default_navigation_timeout(self.config.navigation_timeout)
-            if self.config.block_images:
+            if self.config.public_only:
+                blocked = set(self.config.block_resources)
+                self._context.route(
+                    "**/*",
+                    lambda route, req: _request_router(
+                        route,
+                        req,
+                        public_only=True,
+                        block_images=self.config.block_images,
+                        blocked_types=blocked,
+                    ),
+                )
+            elif self.config.block_images:
                 self._context.route("**/*", _block_images_router)
             elif self.config.block_resources:
                 blocked = set(self.config.block_resources)
@@ -657,6 +669,28 @@ def _block_images_router(route, request) -> None:  # pragma: no cover - browser 
 
 def _block_types_router(route, request, blocked) -> None:  # pragma: no cover - browser side
     if request.resource_type in blocked:
+        route.abort()
+    else:
+        route.continue_()
+
+def _request_router(route, request, *, public_only: bool, block_images: bool, blocked_types) -> None:
+    """Apply URL and resource policies in one route handler.
+
+    Playwright runs the most recently registered route first, so combining
+    these checks avoids one policy accidentally bypassing another.
+    """
+    if public_only:
+        from .security import PublicURLRejected, validate_public_url
+
+        try:
+            validate_public_url(request.url)
+        except PublicURLRejected:
+            route.abort("blockedbyclient")
+            return
+
+    if block_images and request.resource_type == "image":
+        route.abort()
+    elif request.resource_type in blocked_types:
         route.abort()
     else:
         route.continue_()
