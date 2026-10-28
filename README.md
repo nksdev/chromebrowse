@@ -423,6 +423,7 @@ from chromebrowse import (
     ChromiumNotFoundError,   # no binary, and auto-install is off
     NavigationError,         # the page failed to load
     ElementNotFoundError,    # a selector matched nothing
+    ElementInteractionError, # a matched element could not be interacted with
     BrowserTimeoutError,     # a wait timed out
     SessionError,            # session state problem
 )
@@ -665,7 +666,7 @@ python -m venv .venv
 source .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install -e ".[dev]"
 
-pytest                              # offline suite, fast (31 tests)
+pytest                              # offline regression suite
 CHROMEBROWSE_LIVE=1 pytest tests/test_live.py -v   # real browser (6 tests)
 ```
 
