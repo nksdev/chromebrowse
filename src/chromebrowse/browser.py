@@ -263,7 +263,7 @@ class Page:
 
     def wait_for_load(self, state: LoadState = "load", timeout: Optional[float] = None) -> "Page":
         try:
-            self._pw_page.wait_for_load_state(state, timeout=timeout or self._timeout)
+            self._pw_page.wait_for_load_state(state, timeout=self._timeout if timeout is None else timeout)
         except Exception as exc:
             raise BrowserTimeoutError(f"timeout waiting for load state {state!r}: {exc}") from exc
         return self
