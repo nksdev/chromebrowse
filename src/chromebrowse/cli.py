@@ -291,7 +291,7 @@ def cmd_session(args: argparse.Namespace) -> int:
             print(f"session {args.name!r}: {len(cookies)} cookie(s)")
             for cookie in cookies:
                 print(
-                    f"  {cookie.get('name')}={cookie.get('value')}\\t"
+                    f"  {cookie.get('name')}={cookie.get('value')}\t"
                     f"{cookie.get('domain', '')}"
                 )
         return 0
