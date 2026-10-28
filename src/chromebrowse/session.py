@@ -111,7 +111,13 @@ class Session:
             try:
                 self._load_state_file(self.state_path)
             except SessionError:
-                pass  # corrupt state should not block startup
+                # Do not silently continue with an empty session: close the
+                # browser and preserve the invalid file for diagnosis/recovery.
+                try:
+                    self._browser.close()
+                finally:
+                    self._browser = None
+                raise
         return self
 
     def _load_state_file(self, path: Path) -> None:
