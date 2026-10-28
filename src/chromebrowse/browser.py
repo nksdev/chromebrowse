@@ -734,14 +734,16 @@ class Browser:
     def load_state(self, path: Union[str, Path]) -> None:
         """Load cookies and localStorage from a Playwright storage-state file.
 
-        Call this before navigating to the origins whose localStorage should be
-        restored; Playwright init scripts run before each page's site scripts.
+        Call before opening pages for the target origins. Cookies are applied
+        immediately; localStorage is seeded by an origin-scoped init script
+        before site scripts run.
         """
         if not self._started:
             self.start()
         state_path = Path(path)
         if not state_path.is_file():
             raise SessionError(f"storage state not found: {state_path}")
+
         try:
             data = json.loads(state_path.read_text(encoding="utf-8"))
             if not isinstance(data, dict):
@@ -752,39 +754,46 @@ class Browser:
                 raise ValueError("'cookies' must be a list")
             if not isinstance(origins, list):
                 raise ValueError("'origins' must be a list")
+
+            stores = {}
+            for entry in origins:
+                if not isinstance(entry, dict):
+                    raise ValueError("each origin entry must be an object")
+                origin = entry.get("origin")
+                items = entry.get("localStorage", [])
+                if not isinstance(origin, str) or not origin:
+                    raise ValueError("each origin entry must contain a non-empty origin")
+                if not isinstance(items, list):
+                    raise ValueError("'localStorage' must be a list")
+                values = {}
+                for item in items:
+                    if not isinstance(item, dict) or "name" not in item:
+                        raise ValueError("each localStorage item must contain a name")
+                    values[str(item["name"])] = str(item.get("value", ""))
+                stores[origin] = values
         except Exception as exc:
             raise SessionError(f"invalid storage state: {exc}") from exc
 
-        if cookies:
-            try:
+        # Do not apply a partially validated state document.
+        try:
+            if cookies:
                 self._context.add_cookies(cookies)
-            except Exception as exc:
-                raise SessionError(f"cannot apply cookies: {exc}") from exc
-
-        stores = {}
-        for entry in origins:
-            if not isinstance(entry, dict):
-                continue
-            origin = entry.get("origin")
-            items = entry.get("localStorage") or []
-            if isinstance(origin, str) and isinstance(items, list):
-                stores[origin] = {
-                    str(item["name"]): str(item.get("value", ""))
-                    for item in items
-                    if isinstance(item, dict) and "name" in item
-                }
-        if stores:
-            payload = json.dumps(stores, ensure_ascii=True)
-            script = (
-                "(() => { const stores = " + payload + "; "
-                "const values = stores[window.location.origin]; "
-                "if (values) { for (const [key, value] of Object.entries(values)) "
-                "{ try { window.localStorage.setItem(key, value); } catch (_) {} } } })();"
-            )
-            try:
+            if stores:
+                payload = json.dumps(stores, ensure_ascii=True)
+                script = (
+                    "(() => { const stores = " + payload + "; "
+                    "const values = stores[window.location.origin]; "
+                    "if (values) { "
+                    "for (const key of Object.keys(window.localStorage)) { "
+                    "if (!(key in values)) window.localStorage.removeItem(key); "
+                    "} "
+                    "for (const [key, value] of Object.entries(values)) { "
+                    "window.localStorage.setItem(key, value); "
+                    "} } })();"
+                )
                 self._context.add_init_script(script=script)
-            except Exception as exc:
-                raise SessionError(f"cannot restore localStorage: {exc}") from exc
+        except Exception as exc:
+            raise SessionError(f"cannot apply storage state: {exc}") from exc
 
     @staticmethod
     def info() -> Dict[str, Any]:
