@@ -201,6 +201,22 @@ class Page:
         self._pw_page.pdf(path=str(path))
         return str(path)
 
+    # --------------------------------------------------------------- network
+    def observe_network(self, **filters: Any):
+        """Start observing network activity for this page.
+
+        Returns a :class:`chromebrowse.network.NetworkObserver` already attached
+        to the underlying Playwright page. The observer detaches itself when the
+        page closes; call ``observer.stop()`` to detach earlier.
+
+        Accepted filters: ``resource_types``, ``methods``, ``domains``,
+        ``url_pattern``, ``max_events``, ``redact``, ``on_event``. See
+        :class:`chromebrowse.network.NetworkObserver` for semantics.
+        """
+        from .network import NetworkObserver
+
+        return NetworkObserver(self._pw_page, **filters).start()
+
     # ------------------------------------------------------------- extraction
     def extract(
         self,
@@ -218,7 +234,7 @@ class Page:
         if include_html:
             content.html = self.content()
         if include_markdown:
-            content.markdown = html_to_text(content.html or self.content())
+            content.markdown = html_to_markdown(content.html or self.content())
         if include_links:
             content.links = self.links()
         try:
