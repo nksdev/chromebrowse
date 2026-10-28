@@ -59,7 +59,7 @@ def _config_from_args(args: argparse.Namespace) -> BrowserConfig:
         java_script_enabled=not getattr(args, "no_js", False),
         extra_headers=headers,
     )
-    if getattr(args, "timeout", None):
+    if getattr(args, "timeout", None) is not None:
         cfg.navigation_timeout = args.timeout
         cfg.default_timeout = args.timeout
     if getattr(args, "user_agent", None):
