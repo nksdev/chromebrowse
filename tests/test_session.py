@@ -108,3 +108,81 @@ def test_load_state_file_restores_cookies_and_local_storage(tmp_path):
     assert session.browser.context.cookies[0]["name"] == "sid"
     assert "https://example.com" in session.browser.context.script
     assert "localStorage.setItem" in session.browser.context.script
+
+
+
+def test_start_fails_and_preserves_corrupt_state_file(tmp_path, monkeypatch):
+    import pytest
+    from chromebrowse import session as session_module
+    from chromebrowse.exceptions import SessionError
+
+    state_file = tmp_path / "broken.json"
+    state_file.write_text("{not-json", encoding="utf-8")
+    instances = []
+
+    class FakeBrowser:
+        def __init__(self, config):
+            self.closed = False
+            instances.append(self)
+
+        def start(self):
+            return self
+
+        def close(self):
+            self.closed = True
+
+    monkeypatch.setattr(session_module, "Browser", FakeBrowser)
+    s = session_module.Session("broken", state_dir=tmp_path, persist=True)
+
+    with pytest.raises(SessionError):
+        s.start()
+
+    assert state_file.exists()
+    assert instances[0].closed is True
+    assert s._browser is None
+
+
+
+def test_clear_does_not_recreate_state_file_on_close(tmp_path):
+    from chromebrowse.session import Session
+
+    state_file = tmp_path / "demo.json"
+    state_file.write_text('{"cookies": [], "origins": []}', encoding="utf-8")
+
+    class FakePage:
+        def __init__(self):
+            self.cleared = False
+
+        def evaluate(self, script):
+            self.cleared = "localStorage.clear" in script and "sessionStorage.clear" in script
+
+    class FakeContext:
+        def __init__(self):
+            self.pages = [FakePage()]
+            self.cookies_cleared = False
+
+        def clear_cookies(self):
+            self.cookies_cleared = True
+
+    class FakeBrowser:
+        def __init__(self):
+            self.context = FakeContext()
+            self.closed = False
+
+        def close(self):
+            self.closed = True
+
+    s = Session("demo", state_dir=tmp_path, persist=True)
+    fake_browser = FakeBrowser()
+    s._browser = fake_browser
+
+    s.clear()
+
+    assert not state_file.exists()
+    assert fake_browser.context.cookies_cleared is True
+    assert fake_browser.context.pages[0].cleared is True
+
+    s.close()
+
+    assert fake_browser.closed is True
+    assert not state_file.exists()

@@ -583,19 +583,59 @@ class Browser:
         return str(path)
 
     def load_state(self, path: Union[str, Path]) -> None:
+        """Load cookies and localStorage from a Playwright storage-state file.
+
+        Call this before navigating to the origins whose localStorage should be
+        restored; Playwright init scripts run before each page's site scripts.
+        """
         if not self._started:
             self.start()
         state_path = Path(path)
         if not state_path.is_file():
             raise SessionError(f"storage state not found: {state_path}")
-        cookies = []
         try:
-            data = json.loads(state_path.read_text("utf-8"))
+            data = json.loads(state_path.read_text(encoding="utf-8"))
+            if not isinstance(data, dict):
+                raise ValueError("storage state must be a JSON object")
             cookies = data.get("cookies", [])
+            origins = data.get("origins", [])
+            if not isinstance(cookies, list):
+                raise ValueError("'cookies' must be a list")
+            if not isinstance(origins, list):
+                raise ValueError("'origins' must be a list")
         except Exception as exc:
             raise SessionError(f"invalid storage state: {exc}") from exc
+
         if cookies:
-            self._context.add_cookies(cookies)
+            try:
+                self._context.add_cookies(cookies)
+            except Exception as exc:
+                raise SessionError(f"cannot apply cookies: {exc}") from exc
+
+        stores = {}
+        for entry in origins:
+            if not isinstance(entry, dict):
+                continue
+            origin = entry.get("origin")
+            items = entry.get("localStorage") or []
+            if isinstance(origin, str) and isinstance(items, list):
+                stores[origin] = {
+                    str(item["name"]): str(item.get("value", ""))
+                    for item in items
+                    if isinstance(item, dict) and "name" in item
+                }
+        if stores:
+            payload = json.dumps(stores, ensure_ascii=True)
+            script = (
+                "(() => { const stores = " + payload + "; "
+                "const values = stores[window.location.origin]; "
+                "if (values) { for (const [key, value] of Object.entries(values)) "
+                "{ try { window.localStorage.setItem(key, value); } catch (_) {} } } })();"
+            )
+            try:
+                self._context.add_init_script(script=script)
+            except Exception as exc:
+                raise SessionError(f"cannot restore localStorage: {exc}") from exc
 
     @staticmethod
     def info() -> Dict[str, Any]:

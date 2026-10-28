@@ -181,40 +181,61 @@ with Browser() as b:
         print(link.text(), "->", link.attr("href"))
 ```
 
-### Example 2 - Give a FastAPI service the ability to read any page
+### Example 2 - Give a FastAPI service the ability to read a page
+
+The synchronous Playwright API must be used from the thread that created it. This
+example confines browser startup, requests, and shutdown to a single worker
+thread. That keeps the example thread-safe, but requests are serialized. For
+higher concurrency, build this service around Playwright's async API instead.
 
 ```python
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
+from functools import partial
 
 from fastapi import FastAPI, HTTPException
 from chromebrowse import Browser, BrowserError
 
+executor = ThreadPoolExecutor(max_workers=1)
 browser = None
+
+
+def read_page(url: str):
+    page = None
+    try:
+        page = browser.open(url, wait_until="domcontentloaded")
+        return {"title": page.title, "text": page.text()[:5000]}
+    finally:
+        if page is not None:
+            page.close()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global browser
-    browser = Browser().start()   # launch once, share forever
-    yield
-    browser.close()
+    loop = asyncio.get_running_loop()
+    try:
+        browser = await loop.run_in_executor(executor, lambda: Browser().start())
+        yield
+    finally:
+        if browser is not None:
+            await loop.run_in_executor(executor, browser.close)
+        executor.shutdown(wait=True)
 
 
 app = FastAPI(lifespan=lifespan)
 
 
 @app.get("/read")
-def read(url: str):
-    page = None
+async def read(url: str):
+    loop = asyncio.get_running_loop()
     try:
-        page = browser.open(url, wait_until="domcontentloaded")
-        return {"title": page.title, "text": page.text()[:5000]}
+        return await loop.run_in_executor(executor, partial(read_page, url))
     except BrowserError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-    finally:
-        if page is not None:
-            page.close()
 ```
+
 
 ### Example 3 - Turn a workflow into a command-line tool
 
@@ -227,7 +248,8 @@ from chromebrowse import Browser
 
 
 def main() -> int:
-    content = Browser().fetch(sys.argv[1], include_links=True)
+    with Browser() as browser:
+        content = browser.fetch(sys.argv[1], include_links=True)
     json.dump(content.as_dict(), sys.stdout, indent=2)
     return 0
 
