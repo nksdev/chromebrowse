@@ -184,7 +184,7 @@ class Session:
                 pass
             with os.fdopen(fd, "w", encoding="utf-8") as stream:
                 json.dump(state, stream, ensure_ascii=False, indent=2)
-                stream.write("\\n")
+                stream.write("\n")
             os.replace(temporary, self.state_path)
             try:
                 os.chmod(self.state_path, 0o600)
