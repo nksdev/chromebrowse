@@ -4,160 +4,153 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/downloads/)
 
-A reusable, self-contained **Chromium browsing engine for Python**.
+**A reusable Chromium browser toolkit for Python — built on Playwright.**
 
-**New to chromebrowse?** Start with the [User Guide](docs/USER_GUIDE.md) for installation, copyable integration examples, capabilities, sessions, configuration, CLI usage, and security guidance. For deployment risk and mitigations, read the [Security Review](docs/SECURITY_REVIEW.md).
+`chromebrowse` gives Python applications a consistent API for opening web pages, running JavaScript-rendered sites, extracting structured content, interacting with page elements, saving browser sessions, observing browser network events, and crawling pages within configured limits. Use it as a Python library or from the command line.
 
-Give any Python project the ability to reach the internet, navigate sites,
-render JavaScript pages, extract content, discover links, interact with
-elements, take screenshots, and keep a login session - through a small Python
-API or a command-line tool.
+It runs locally on your machine. It does not require a paid scraping API or a separate browser-driver management workflow. On first use, it can download a compatible Chromium browser if one is not already available.
 
-No paid APIs. No browser automation code to write yourself. No separate
-Chromium install to manage.
+**New here?** Start with the [Quick start](#quick-start). For step-by-step examples, see the [User Guide](docs/USER_GUIDE.md). Before exposing URL browsing through a service, read the [Security Review](docs/SECURITY_REVIEW.md).
 
 ---
 
 ## Contents
 
-- [Why use this](#why-use-this)
-- [User guide: use chromebrowse in your project](docs/USER_GUIDE.md)
-- [Security review and deployment guidance](docs/SECURITY_REVIEW.md)
-- [Install](#install)
-- [Add it to an existing project](#add-it-to-an-existing-project)
-- [Five real-world examples](#five-real-world-examples)
-- [API reference](#api-reference)
-- [Command line](#command-line)
-- [Recipes](#recipes)
+- [What it is](#what-it-is)
+- [Quick start](#quick-start)
+- [Installation](#installation)
+- [Capabilities](#capabilities)
+- [Examples](#examples)
+- [Command-line interface](#command-line-interface)
+- [API overview](#api-overview)
 - [Configuration](#configuration)
-- [How Chromium is found](#how-chromium-is-found)
+- [Security and responsible use](#security-and-responsible-use)
 - [Documentation](#documentation)
 - [Architecture](#architecture)
-- [Development](#development)
-- [Publishing to PyPI](#publishing-to-pypi)
-- [Licensing](#licensing)
+- [Development and tests](#development-and-tests)
+- [Publishing](#publishing)
+- [License](#license)
 
----
+## What it is
 
-## Why use this
+`chromebrowse` is a **synchronous Python abstraction over Playwright and Chromium**. It handles common browser tasks behind reusable objects such as `Browser`, `Page`, `Element`, and `Session`, so application code does not have to repeatedly implement browser startup, page extraction, interactions, and session management.
 
-Most "scrape a website in Python" advice breaks the moment the site renders with
-JavaScript. The usual options each have a catch:
+It is useful when you need a real browser engine to work with sites that render content in JavaScript, rather than relying only on a direct HTTP request.
 
-| Approach | What goes wrong |
-|---|---|
-| `requests` + `BeautifulSoup` | Returns an empty shell on React / Vue / Next.js sites |
-| Selenium | Needs a driver binary, version matching, and a lot of boilerplate |
-| Playwright directly | Excellent, but you rewrite session, extraction, and error handling in every project |
-| Hosted scraping APIs | Cost money and send your traffic through a third party |
+### What you can build with it
 
-`chromebrowse` is a thin, opinionated layer over Playwright. The whole stack
-stays open source and runs on your own machine, and the boilerplate you would
-otherwise rewrite every time is already written.
+- **Browser-based extraction:** collect readable text, Markdown, links, metadata, HTML tables, form values, and JSON-LD data.
+- **Browser automation:** click elements, fill fields, select options, wait for page elements, and execute JavaScript in the page.
+- **Evidence capture:** save screenshots and PDFs of rendered pages.
+- **Reusable login sessions:** persist browser state, including cookies and local storage, for later runs.
+- **Network observation:** record filtered request, response, and failed-request metadata with bounded storage and header redaction.
+- **Bounded crawling:** follow links with scope rules, depth/page limits, URL normalization, delays, resume support, and cancellation.
+- **Integration:** use the same toolkit from ordinary Python code, scripts, command-line workflows, and carefully configured services.
 
-Everything below is one import away:
+### What it is not
 
-| What you want | Python | CLI |
-|---|---|---|
-| Load a page and run its JavaScript | `browser.open(url)` | `chromebrowse text URL` |
-| Read clean text | `page.text()` | `chromebrowse text URL` |
-| Get structured data | `page.extract()` | `chromebrowse fetch URL --json` |
-| Convert to Markdown | `page.markdown()` | `chromebrowse fetch URL --json` |
-| List links | `page.links()` | `chromebrowse links URL` |
-| Extract tables as JSON | `page.tables()` | `chromebrowse fetch URL --json` |
-| Read form values | `page.form_values()` | `chromebrowse open URL` |
-| Batch many URLs | `browser.batch(urls)` | - |
-| Click, type, select | `page.click()` `page.fill()` | `chromebrowse open URL` |
-| Screenshot | `page.snapshot()` | `chromebrowse shot URL out.png` |
-| PDF | `page.pdf()` | `chromebrowse pdf URL out.pdf` |
-| Run JavaScript | `page.evaluate()` | `chromebrowse eval URL "js"` |
-| Read cookies | `page.cookies()` | `chromebrowse cookies URL` |
-| Stay logged in | `Session("name")` | `chromebrowse session ...` |
+`chromebrowse` is not a packet-capture tool, a full HTTP interception proxy, a distributed high-throughput crawler, or a complete vulnerability scanner. Its network observer records browser-exposed event metadata, not all network traffic or response bodies. Its URL restriction feature is a defense-in-depth measure, not a complete Server-Side Request Forgery (SSRF) boundary. It does not provide a built-in LLM agent, CAPTCHA-solving, or guaranteed anti-bot bypass.
 
----
+The project builds on Playwright; it does not replace Chromium or the underlying browser automation engine.
 
-## Install
+## Quick start
 
-Until a PyPI release is published, install the current GitHub version:
+### 1. Install the current GitHub version
+
+Until a PyPI release is available, install directly from the repository:
 
 ```bash
 python -m pip install "git+https://github.com/nksdev/chromebrowse.git"
 ```
 
-After the package is published to PyPI, the shorter command will be available:
+### 2. Open a page and extract content
+
+```python
+from chromebrowse import Browser
+
+with Browser() as browser:
+    page = browser.open("https://example.com")
+
+    print("Title:", page.title)
+    print("URL:", page.current_url())
+    print(page.text()[:500])
+
+    for link in page.links():
+        print(link.text, link.href)
+```
+
+The context manager closes the browser when the block exits, including when an exception occurs.
+
+### 3. Verify the installation
+
+```bash
+python -m chromebrowse --version
+chromebrowse info
+```
+
+On first use, Chromium may be downloaded automatically. See [Installation](#installation) for browser setup, custom paths, and offline environments.
+
+## Installation
+
+### Requirements
+
+- Python **3.9 or newer**
+- macOS, Windows, or Linux
+- Network access on first use if a compatible browser must be downloaded
+
+Install the current repository version:
+
+```bash
+python -m pip install "git+https://github.com/nksdev/chromebrowse.git"
+```
+
+Once a release is published to PyPI, the package can be installed with:
 
 ```bash
 python -m pip install chromebrowse
 ```
 
-Verify the installation:
+### Install Chromium explicitly
+
+For Docker images, build pipelines, or controlled deployments, install the browser before running your application:
 
 ```bash
-python -m chromebrowse --version
-chromebrowse info
-python -c "from chromebrowse import Browser; b=Browser(); print(b.open('https://example.com').title); b.close()"
-# Example Domain
+chromebrowse install
+chromebrowse install --dir /opt/browsers
+chromebrowse install --force
 ```
 
-**Requirements:** Python 3.9 or newer on macOS, Windows, or Linux. Chromium is
-downloaded on first use if no compatible browser is found and auto-install is
-enabled.
+The first command uses the default browser cache. The second selects a directory. The third forces a re-download.
 
-### What happens on first run
+By default, the browser cache is stored under `~/.chromebrowse/browsers` in a writable home directory. You can change it with `CHROMEBROWSE_BROWSERS_DIR`.
 
-The first time you launch a browser, chromebrowse downloads Chromium if needed
-(roughly 150–200 MB, depending on platform). By default it stores the browser
-under `~/.chromebrowse/browsers` on a writable home directory. Set
-`CHROMEBROWSE_BROWSERS_DIR` to choose a different download directory. If an
-existing `.browsers` directory is found near the package, it may be reused.
+### Use an existing browser or disable automatic installation
 
-### Download Chromium up front instead
-
-Better for Docker images and CI, where you want the download at build time
-rather than during the first request:
-
-```bash
-chromebrowse install                      # into the default browser cache
-chromebrowse install --dir /opt/browsers   # into a specific folder
-chromebrowse install --force               # re-download even if present
-```
-
-### Air-gapped machines
-
-Download on a connected machine, copy the folder across, then point at the
-binary:
-
-```bash
-chromebrowse install --dir ./browsers
-# copy ./browsers to the target machine, then:
-export CHROMEBROWSE_CHROMIUM=/exact/path/printed/by/chromebrowse-install
-```
-
-### Opting out of the automatic download
+To select a specific Chromium-compatible browser, set `CHROMEBROWSE_CHROMIUM` to its executable path. To prevent automatic browser download:
 
 ```python
 from chromebrowse import Browser, BrowserConfig
 
-with Browser(BrowserConfig(auto_install=False)) as b:
-    ...
+with Browser(BrowserConfig(auto_install=False)) as browser:
+    page = browser.open("https://example.com")
+    print(page.title)
 ```
 
-You will then get ChromiumNotFoundError if no browser is present.
----
+If no compatible browser is found while automatic installation is disabled, startup raises `ChromiumNotFoundError`.
 
-## Google Colab
+### Air-gapped environments
 
-Google Colab runs notebook cells with an active asyncio event loop. Because
-chromebrowse currently uses Playwright's **synchronous** API, start and use the
-browser inside a worker thread rather than directly in the notebook thread.
+On a machine with internet access, download the browser into a directory:
 
-Install in a Colab cell:
-
-```python
-%pip install "git+https://github.com/nksdev/chromebrowse.git"
+```bash
+chromebrowse install --dir ./browsers
 ```
 
-Then run the complete browser operation in one worker thread:
+Transfer that directory to the target machine, then point `CHROMEBROWSE_CHROMIUM` at the actual browser executable path printed by the installer. Browser and operating-system dependencies must still be compatible with the target machine.
+
+### Google Colab
+
+Colab runs cells inside an active asyncio event loop, while `chromebrowse` currently uses Playwright's synchronous API. Run the complete browser operation inside a worker thread:
 
 ```python
 from concurrent.futures import ThreadPoolExecutor
@@ -180,40 +173,139 @@ with ThreadPoolExecutor(max_workers=1) as executor:
     result = executor.submit(read_example).result()
 
 print(result["title"])
-print(result["url"])
 print(result["text"])
-print(result["links"])
 ```
 
-Keep **all** operations on a given `Browser` and its pages in the same worker
-thread. Do not create a browser in one thread and use or close it in another.
-Colab does not normally provide a desktop display for a visible Chromium window;
-use headless browsing and return outputs (text, JSON, screenshots, or PDFs) to
-the notebook. The runtime is temporary, so download any files you need to keep.
+Keep creation, use, and shutdown of a given browser in the same worker thread. This workaround does not turn the synchronous API into an asynchronous API. Colab runtimes are temporary, so download any output files you need to keep.
 
-If startup still fails, inspect the underlying Chromium/dependency error and
-install any missing Linux system libraries. This thread workaround addresses
-the active-event-loop conflict; it does not make the synchronous API an
-asynchronous API.
+## Capabilities
 
----
+| Need | Python API | CLI |
+|---|---|---|
+| Open and render a page | `browser.open(url)` | `chromebrowse text URL` |
+| Extract readable text | `page.text()` | `chromebrowse text URL` |
+| Get structured page content | `page.extract()` or `browser.fetch(url)` | `chromebrowse fetch URL --json` |
+| Convert a page to Markdown | `page.markdown()` | `chromebrowse fetch URL --markdown` |
+| Find links | `page.links()` | `chromebrowse links URL` |
+| Extract HTML tables | `page.tables()` | `chromebrowse fetch URL --json` |
+| Read form values | `page.form_values()` | `chromebrowse open URL` |
+| Click, type, or select | `page.click()`, `page.fill()`, `page.press()` | `chromebrowse open URL --show` |
+| Capture a screenshot | `page.snapshot()` | `chromebrowse shot URL out.png` |
+| Save a PDF | `page.pdf()` | `chromebrowse pdf URL out.pdf` |
+| Execute page JavaScript | `page.evaluate()` | `chromebrowse eval URL "js"` |
+| Inspect cookies | `page.cookies()` | `chromebrowse cookies URL` |
+| Persist a logged-in session | `Session("name")` | `chromebrowse session ...` |
+| Observe request/response metadata | `page.observe_network()` | — |
+| Crawl linked pages | `Crawler(...).crawl(url)` | — |
 
-## Add it to an existing project
+## Examples
 
-chromebrowse is an ordinary dependency. Pick whichever file your project already uses:
+### Extract a JavaScript-rendered page
+
+```python
+from chromebrowse import Browser
+
+with Browser() as browser:
+    page = browser.open(
+        "https://news.ycombinator.com",
+        wait_until="networkidle",
+    )
+
+    for link in page.find_all(".titleline a")[:10]:
+        print(link.text(), "->", link.attr("href"))
+```
+
+For structured output, use `page.extract()` or `browser.fetch(url)`. The returned content can be converted to a dictionary for JSON serialization.
+
+### Observe browser network activity
+
+```python
+from chromebrowse import Browser
+
+with Browser() as browser:
+    page = browser.open("https://example.com")
+    observer = page.observe_network(
+        resource_types={"xhr", "fetch"},
+        max_events=200,
+    )
+
+    page.reload()
+
+    for event in observer.events:
+        print(event.kind, event.method, event.url)
+
+    print("Events dropped because the buffer filled:", observer.dropped)
+    observer.stop()
+```
+
+The observer has a bounded event buffer. Header redaction is enabled by default, but redaction is based on header names; secrets embedded in query strings or other values may still be recorded. See [Network observation](docs/NETWORK.md).
+
+### Crawl pages within a limit
+
+```python
+from chromebrowse.crawl import Crawler
+
+crawler = Crawler(
+    max_pages=25,
+    max_depth=2,
+    delay_seconds=0.5,
+)
+result = crawler.crawl("https://example.com")
+
+print(result.visited, "visited,", result.failed, "failed")
+for page in result.pages:
+    print(page.status, page.url, len(page.text))
+```
+
+The crawler renders each page in Chromium. By default, it stays within the seed host and applies page/depth limits and a delay. You can configure scope, resume output, callbacks, and cancellation. Scope controls are not authorization: only crawl systems you are allowed to access. See [Crawling](docs/CRAWLING.md).
+
+### Reuse a login session
+
+```python
+from chromebrowse import Session
+
+with Session("dashboard") as session:
+    session.open("https://example.com/login")
+    session.page.fill("#username", "YOUR_USERNAME")
+    session.page.fill("#password", "YOUR_PASSWORD")
+    session.page.click("button[type=submit]")
+    session.page.wait_for("#account")
+    session.save()
+
+# A later run can reuse the stored browser state.
+with Session("dashboard") as session:
+    page = session.open("https://example.com/reports")
+    print(page.text()[:2000])
+```
+
+Replace the placeholder values and selectors with those used by the site. Session files contain authentication material; store them in a protected directory and never commit them to source control. Set `CHROMEBROWSE_STATE_DIR` to change the session-state directory.
+
+### Capture a screenshot or PDF
+
+```python
+from chromebrowse import Browser
+
+with Browser() as browser:
+    page = browser.open("https://example.com")
+    page.snapshot("page.png", full_page=True)
+    page.pdf("page.pdf")
+```
+
+### Use it in an existing Python project
+
+Install `chromebrowse` as a dependency, then import the API where you need it:
 
 ```bash
-# requirements.txt (until the PyPI release exists)
-echo 'chromebrowse @ git+https://github.com/nksdev/chromebrowse.git' >> requirements.txt
-
-# Install directly with pip
 python -m pip install "git+https://github.com/nksdev/chromebrowse.git"
 ```
 
-Once the PyPI release is published, you can use `poetry add chromebrowse`,
-`uv add chromebrowse`, or `pipenv install chromebrowse`.
+For a `requirements.txt` file, add:
 
-For a project using `pyproject.toml` before PyPI publication:
+```text
+chromebrowse @ git+https://github.com/nksdev/chromebrowse.git
+```
+
+For `pyproject.toml` before a PyPI release:
 
 ```toml
 [project]
@@ -222,315 +314,33 @@ dependencies = [
 ]
 ```
 
-Then import it wherever you need a browser:
+For long-running applications, create and reuse a browser instance rather than launching a new browser for each request. Browser startup consumes time and memory. For a web service that accepts URLs from users, add authentication, rate limiting, quotas, monitoring, and network-level egress restrictions. The [User Guide](docs/USER_GUIDE.md) has a more complete FastAPI integration example and deployment notes.
 
-```python
-from chromebrowse import Browser
-```
+## Command-line interface
 
-That is the entire integration. There is no server to run, no API key, no
-background daemon, and no configuration file required.
+Installing the package also installs the `chromebrowse` command.
 
-> **Important for servers:** create **one** `Browser` when your app starts and
-> reuse it for every request. Launching a browser costs ~300 ms and a few
-> hundred MB, so doing it per request will not scale.
-
-> **Security warning:** the `/read?url=...` example below enables `BrowserConfig(public_only=True)`, a defense-in-depth URL filter that restricts every browser request to HTTP/HTTPS and rejects non-global destination addresses. It is **not a complete SSRF boundary**: DNS can change between validation and Chromium's connection, and browser traffic can reach destinations through network behaviors outside URL parsing. For a public service, also enforce outbound network/firewall policy that blocks internal, loopback, link-local, metadata, and other restricted ranges; preferably allowlist destinations. The default remains unrestricted so authorized pentests and local labs continue to work.
----
-
-## Five real-world examples
-
-### Example 1 - Scrape a JavaScript-rendered listing
-
-```python
-from chromebrowse import Browser
-
-with Browser() as b:
-    page = b.open("https://news.ycombinator.com", wait_until="networkidle")
-
-    for link in page.find_all(".titleline a")[:10]:
-        print(link.text(), "->", link.attr("href"))
-```
-
-### Example 2 - Give a FastAPI service the ability to read a page
-
-The synchronous Playwright API must be used from the thread that created it. This
-example confines browser startup, requests, and shutdown to a single worker
-thread. That keeps the example thread-safe, but requests are serialized. For
-higher concurrency, build this service around Playwright's async API instead.
-This is a demonstration, not a complete public-service deployment: add
-authentication, rate limiting, request quotas, and operational monitoring before
-exposing an endpoint to untrusted callers. `public_only=True` is not a substitute
-for those controls or for network-level egress restrictions.
-
-```python
-import asyncio
-from concurrent.futures import ThreadPoolExecutor
-from contextlib import asynccontextmanager
-from functools import partial
-
-from fastapi import FastAPI, HTTPException
-from chromebrowse import Browser, BrowserConfig, BrowserError
-
-executor = ThreadPoolExecutor(max_workers=1)
-browser = None
-
-
-def read_page(url: str):
-    page = None
-    try:
-        page = browser.open(url, wait_until="domcontentloaded", timeout=15_000)
-        return {"title": page.title, "text": page.text()[:5000]}
-    finally:
-        if page is not None:
-            page.close()
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    global browser
-    loop = asyncio.get_running_loop()
-    try:
-        browser = await loop.run_in_executor(
-            executor, lambda: Browser(BrowserConfig(public_only=True)).start()
-        )
-        yield
-    finally:
-        try:
-            if browser is not None:
-                await loop.run_in_executor(executor, browser.close)
-        finally:
-            executor.shutdown(wait=True)
-
-
-app = FastAPI(lifespan=lifespan)
-
-
-@app.get("/read")
-async def read(url: str):
-    loop = asyncio.get_running_loop()
-    try:
-        return await loop.run_in_executor(executor, partial(read_page, url))
-    except BrowserError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
-```
-
-
-### Example 3 - Turn a workflow into a command-line tool
-
-```python
-# myscraper/__main__.py
-import json
-import sys
-
-from chromebrowse import Browser
-
-
-def main() -> int:
-    with Browser() as browser:
-        content = browser.fetch(sys.argv[1], include_links=True)
-    json.dump(content.as_dict(), sys.stdout, indent=2)
-    return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
-```
+### Common commands
 
 ```bash
-python -m myscraper https://example.com > out.json
-```
+# Diagnostics and browser setup
+chromebrowse info
+chromebrowse install
 
-### Example 4 - Process many URLs without one failure killing the batch
-
-```python
-from chromebrowse import Browser, BrowserError
-
-urls = ["https://example.com", "https://example.org", "https://example.net"]
-results = []
-
-with Browser() as b:
-    page = b.new_page()   # reuse one tab for the whole batch
-
-    for url in urls:
-        try:
-            page.goto(url, wait_until="domcontentloaded")
-            results.append({"url": url, "title": page.title, "ok": True})
-        except BrowserError as exc:
-            results.append({"url": url, "error": str(exc), "ok": False})
-
-print(results)
-```
-
-### Example 5 - Log in once, reuse the session forever
-
-```python
-from chromebrowse import Session
-
-# Run 1 - log in, then persist cookies + localStorage
-with Session("dashboard") as s:
-    s.open("https://example.com/login")
-    s.page.fill("#username", "me")
-    s.page.fill("#password", "secret")
-    s.page.click("button[type=submit]")
-    s.page.wait_for("#account")
-    s.save()
-
-# Run 2 (cron, next day) - already logged in
-with Session("dashboard") as s:
-    page = s.open("https://example.com/reports")
-    page.snapshot("report.png", full_page=True)
-    print(page.text()[:2000])
-```
-
-Sessions are stored in a writable state directory chosen automatically.
-Override it with `CHROMEBROWSE_STATE_DIR`.
----
-
-## API reference
-
-Four classes cover almost everything.
-
-### `Browser` - owns the Chromium process
-
-```python
-from chromebrowse import Browser
-
-b = Browser()                 # or Browser(BrowserConfig(...))
-b.start()                     # optional; with Browser() does this
-
-page = b.open("https://example.com")  # open a page and navigate
-page = b.new_page()                    # blank tab
-content = b.fetch("https://example.com")  # one-shot structured extraction
-text = b.text("https://example.com")      # one-shot plain text
-links = b.links("https://example.com")    # one-shot link list
-info = b.info()                            # diagnostics
-
-b.close()
-```
-
-Always prefer the context manager (`with Browser() as b:`), which closes
-the browser even if your code raises.
-
-### `Page` - one tab
-
-```python
-page.goto("https://example.com", wait_until="networkidle")
-
-page.title          # <title> text
-page.current_url()  # final URL after redirects
-page.status         # HTTP status code
-
-page.text()         # clean, readable text
-page.html()         # raw HTML
-page.markdown()     # Markdown
-page.links()        # list of Link objects
-page.meta()         # description, og:*, canonical, ...
-page.tables()       # HTML tables as {headers, rows, records}
-page.table("#data") # one table, or ElementNotFoundError
-page.form_values()  # {name: value} for inputs, selects, textareas
-page.extract()      # PageContent with all of the above
-
-page.find("h1")                  # first matching Element, raises if absent
-page.find("h1", required=False)  # None instead of raising
-page.find_all("a")               # list of Elements
-page.exists("#cookie-bar")       # True / False
-
-page.click("button.submit")
-page.fill("input[name=q]", "python")
-page.press("Enter")
-page.wait_for("#results")
-page.evaluate("document.querySelectorAll('p').length")
-page.scroll_to_bottom()
-
-page.snapshot("page.png", full_page=True)
-page.pdf("page.pdf")
-
-page.go_back()
-page.go_forward()
-page.reload()
-page.close()
-```
-
-### `Element` - a matched DOM node
-
-```python
-el = page.find("a.next")
-
-el.text()          # visible text
-el.html()          # inner HTML
-el.attr("href")   # any attribute
-el.value()         # form value
-el.is_visible()
-
-el.click()
-el.fill("hello")
-el.type_text("slow typing")
-el.check()
-el.uncheck()
-el.select("option-value")
-el.hover()
-el.scroll_into_view()
-el.screenshot("element.png")
-el.press("Enter")  # keyboard input
-```
-
-### `Session` - a browser that remembers
-
-```python
-from chromebrowse import Session
-
-with Session("mysite") as s:
-    s.open("https://example.com")
-    s.page.click("#login")
-    s.save()          # persist cookies + localStorage
-    s.cookies()       # inspect them
-
-with Session("mysite") as s:
-    s.open("https://example.com/dashboard")  # already logged in
-```
-
-A `Session` exposes `.browser` and `.page`, so everything above
-works inside it.
-
-### Errors
-
-All exceptions inherit from `BrowserError`:
-
-```python
-from chromebrowse import (
-    BrowserError,            # base class
-    BrowserLaunchError,      # Chromium failed to start
-    ChromiumNotFoundError,   # no binary, and auto-install is off
-    NavigationError,         # the page failed to load
-    ElementNotFoundError,    # a selector matched nothing
-    ElementInteractionError, # a matched element could not be interacted with
-    BrowserTimeoutError,     # a wait timed out
-    SessionError,            # session state problem
-)
-```
-
-Catch `BrowserError` and you cover every failure this library raises.
----
-
-## Command line
-
-Installing the package also installs a `chromebrowse` command.
-
-```bash
-chromebrowse info       # what Chromium was found, plus versions
-chromebrowse install    # download Chromium up front
-
+# Page content
 chromebrowse text https://example.com
-chromebrowse fetch https://example.com --json          # text + markdown + links + meta
-chromebrowse fetch https://example.com --json --html   # also include raw HTML
-chromebrowse fetch https://example.com --markdown      # print Markdown, not plain text
+chromebrowse fetch https://example.com --json
+chromebrowse fetch https://example.com --json --html
+chromebrowse fetch https://example.com --markdown
 chromebrowse links https://example.com --href-only
+
+# Capture and evaluate
 chromebrowse shot https://example.com page.png --full
 chromebrowse pdf https://example.com page.pdf
 chromebrowse eval https://example.com "document.title"
 chromebrowse cookies https://example.com --json
 
+# Persistent sessions
 chromebrowse session list
 chromebrowse session show mysite --json
 chromebrowse session clear mysite
@@ -539,146 +349,175 @@ chromebrowse session delete mysite
 
 ### Interactive browser
 
-A REPL for exploring a site by hand - the fastest way to find the selectors
-you need for a script:
+Use the REPL to explore a site and discover selectors before writing a script:
 
 ```bash
 chromebrowse open https://example.com --show
 ```
 
-```
-cb> title
-Example Domain
-cb> links
-Learn more  https://iana.org/help/example-domains
-cb> click a
-at https://iana.org/help/example-domains
-cb> shot here.png
-saved here.png
-cb> eval document.querySelectorAll("p").length
-3
-cb> goto https://example.org
-at https://example.org/
-cb> back
-at https://example.com/
-cb> quit
-```
+The interactive prompt supports commands such as `title`, `links`, `click`, `shot`, `eval`, `goto`, `back`, and `quit`. Run `chromebrowse --help` or the help output for a specific subcommand to see available options.
 
-**Flags on most commands:** `--show` (visible window), `--no-js`,
-`--timeout MS`, `--wait-until {load,domcontentloaded,networkidle,commit}`,
-`--user-agent`, `--header K:V` (repeatable), `--proxy URL`.
----
+Common flags include `--show` for a visible browser window, `--no-js` to disable JavaScript, `--timeout MS`, `--wait-until`, `--user-agent`, repeatable `--header K:V`, and `--proxy URL`. Check `chromebrowse COMMAND --help` for exact syntax and supported options.
 
-## Recipes
+## API overview
 
-**Wait for content that appears after the first paint**
+The primary public objects are `Browser`, `Page`, `Element`, and `Session`.
 
-```python
-page.goto(url, wait_until="domcontentloaded")
-page.wait_for(".results")      # wait for a selector
-page.wait_for_load("networkidle")  # or wait for network silence
-```
-
-**Save a page as Markdown**
-
-```python
-open("page.md", "w").write(page.markdown())
-```
-
-**Extract much faster by skipping images**
+### Browser
 
 ```python
 from chromebrowse import Browser, BrowserConfig
 
-with Browser(BrowserConfig(block_images=True)) as b:
-    ...
+with Browser(BrowserConfig(headless=True)) as browser:
+    page = browser.open("https://example.com")
+    blank_page = browser.new_page()
+
+    content = browser.fetch("https://example.com")
+    text = browser.text("https://example.com")
+    links = browser.links("https://example.com")
+    diagnostics = browser.info()
 ```
 
-**Use a proxy and custom headers**
+Use `with Browser() as browser` to ensure that the browser is closed when the block exits. If you manage lifecycle manually, call `start()` and `close()` as appropriate.
+
+### Page
+
+Common operations include:
 
 ```python
-cfg = BrowserConfig(
-    proxy="http://user:pass@host:8080",
-    extra_headers={"Accept-Language": "en-GB"},
-)
+page.goto("https://example.com", wait_until="networkidle")
+
+page.title          # title text
+page.current_url()  # final URL after redirects
+page.status         # HTTP status code
+
+page.text()         # readable text
+page.html()         # HTML
+page.markdown()     # Markdown
+page.links()        # Link objects
+page.meta()         # description, Open Graph, canonical, etc.
+page.tables()       # HTML tables
+page.table("#data") # one table or ElementNotFoundError
+page.form_values()  # input/select/textarea values
+page.extract()      # structured PageContent
+
+page.find("h1")                  # first matching Element
+page.find("h1", required=False)  # None if absent
+page.find_all("a")               # matching Elements
+page.exists("#cookie-bar")       # True / False
+
+page.click("button.submit")
+page.fill("input[name=q]", "python")
+page.press("Enter")
+page.wait_for("#results")
+page.evaluate("document.title")
+page.scroll_to_bottom()
+
+page.snapshot("page.png", full_page=True)
+page.pdf("page.pdf")
 ```
 
-**Watch the browser work (debugging)**
+### Element
 
 ```python
-with Browser(BrowserConfig(headless=False, slow_mo=250)) as b:
-    ...
+element = page.find("a.next")
+
+element.text()
+element.html()
+element.attr("href")
+element.value()
+element.is_visible()
+
+element.click()
+element.fill("hello")
+element.type_text("slow typing")
+element.check()
+element.uncheck()
+element.select("option-value")
+element.hover()
+element.scroll_into_view()
+element.screenshot("element.png")
+element.press("Enter")
 ```
 
-**Screenshot a single element**
+### Errors
 
-```python
-page.snapshot("card.png", selector=".product-card")
-```
+Exceptions inherit from `BrowserError`. Common types include:
 
-**Get JSON-safe output**
+- `BrowserLaunchError` — Chromium could not start.
+- `ChromiumNotFoundError` — no browser was found and automatic installation is disabled.
+- `NavigationError` — navigation failed.
+- `ElementNotFoundError` — a required selector did not match.
+- `ElementInteractionError` — an element interaction failed.
+- `BrowserTimeoutError` — an operation timed out.
+- `SessionError` — session-state operation failed.
 
-```python
-import json
-print(json.dumps(page.extract().as_dict(), indent=2))
-```
-
----
+Catch `BrowserError` to handle the library's common browser exceptions. See the [User Guide](docs/USER_GUIDE.md) for error handling and troubleshooting.
 
 ## Configuration
+
+`BrowserConfig` controls startup, browser behavior, timeouts, downloads, and URL restrictions.
 
 ```python
 from chromebrowse import Browser, BrowserConfig
 
 config = BrowserConfig(
-    headless=True,               # False = visible window
+    headless=True,
     viewport_width=1280,
     viewport_height=800,
     locale="en-US",
     timezone="America/New_York",
-    user_agent=None,             # use Playwright's Chromium-matched default
-    java_script_enabled=True,    # False = faster, but no JS rendering
-    block_images=False,          # True = much faster extraction
-    block_resources=[],          # e.g. ["media", "font"]
+    java_script_enabled=True,
+    block_images=False,
+    block_resources=[],       # e.g. ["media", "font"]
     extra_headers={},
-    proxy=None,                  # "http://host:port"
-    default_timeout=30_000,      # ms
-    navigation_timeout=45_000,   # ms
-    slow_mo=0.0,                 # ms delay per action, for debugging
-    user_data_dir=None,          # set to persist the profile
+    proxy=None,
+    default_timeout=30_000,   # milliseconds
+    navigation_timeout=45_000,
+    slow_mo=0.0,
+    user_data_dir=None,
     downloads_path=None,
-    args=[],
-    auto_install=True,           # download Chromium if it is missing
-    prompt_install=False,        # True = ask before downloading
-    public_only=False,           # opt-in HTTP(S)/globally-routable URL filter
-    install_dir=None,            # where auto_install puts Chromium
+    auto_install=True,
+    prompt_install=False,
+    public_only=False,
 )
 
-with Browser(config) as b:
-    ...
+with Browser(config) as browser:
+    page = browser.open("https://example.com")
+    print(page.title)
 ```
 
-It can also be built from a dict, which is handy for config files:
+The API also supports constructing a configuration from a dictionary:
 
 ```python
-cfg = BrowserConfig.from_dict({"headless": False, "block_images": True})
+cfg = BrowserConfig.from_dict({
+    "headless": False,
+    "block_images": True,
+})
 ```
 
-**Environment variables:**
+### Environment variables
 
 | Variable | Purpose |
 |---|---|
-| `CHROMEBROWSE_CHROMIUM` | Path to a specific Chrome/Chromium binary |
-| `CHROMEBROWSE_BROWSERS_DIR` | Where auto-install puts Chromium |
-| `CHROMEBROWSE_STATE_DIR` | Where sessions are saved |
+| `CHROMEBROWSE_CHROMIUM` | Path to a specific Chrome/Chromium executable |
+| `CHROMEBROWSE_BROWSERS_DIR` | Directory for the managed browser download |
+| `CHROMEBROWSE_STATE_DIR` | Directory for saved session state |
 | `PLAYWRIGHT_BROWSERS_PATH` | Standard Playwright browser location |
 
----
+### Browser discovery order
 
-### Public URL restriction (server-side defense in depth)
+At startup, `chromebrowse` checks the configured executable path, `CHROMEBROWSE_CHROMIUM`, supported browser directories, the project-local `.browsers` directory, Playwright's browser cache, and compatible system browsers. If no compatible browser is found and automatic installation is enabled, it attempts to download one.
 
-For services that browse URLs supplied by untrusted callers, enable the opt-in
-policy:
+Run `chromebrowse info` to inspect the resolved browser and environment.
+
+## Security and responsible use
+
+Browser automation executes remote web content and can access network resources from the machine where it runs. Treat URLs, pages, scripts, browser state, and extracted data as untrusted input.
+
+### Public URL restriction
+
+For applications that browse URLs supplied by untrusted callers, `BrowserConfig(public_only=True)` enables an opt-in URL policy:
 
 ```python
 from chromebrowse import Browser, BrowserConfig
@@ -688,84 +527,74 @@ with Browser(BrowserConfig(public_only=True)) as browser:
     print(page.title)
 ```
 
-The policy checks the initial URL, redirects, and subresource requests; permits
-only HTTP/HTTPS; rejects credentials, localhost names, and any host resolving
-to a non-global IP address. It is disabled by default to preserve authorized
-pentesting and local/private lab workflows.
+The policy checks URLs and redirects, limits requests to HTTP/HTTPS, and rejects credentials, local host names, and hosts resolving to non-global IP addresses. It is intended as defense in depth and is disabled by default so authorized testing and private-lab workflows remain possible.
 
-**This policy alone does not guarantee SSRF protection.** DNS may change between
-validation and Chromium's connection, and ordinary Playwright route interception
-does not cover every browser networking mechanism (including WebSocket traffic).
-Deployments accepting untrusted URLs must also enforce network-level egress
-controls and should use an allowlist whenever possible. The `public_only` flag
-is not a replacement for firewall or proxy isolation.
+**This setting does not guarantee SSRF protection.** DNS may change between validation and connection, and browser routing does not cover every networking mechanism. Services exposed to untrusted callers must also enforce outbound network/firewall policy that blocks internal, loopback, link-local, cloud metadata, and other restricted destinations. Prefer explicit destination allowlists. Add authentication, quotas, rate limits, timeouts, and monitoring as appropriate.
 
-## How Chromium is found
+### Additional precautions
 
-At startup, in this order:
+- Use the tool only on sites and accounts you are authorized to access.
+- Respect applicable law, site terms, and site crawling policies.
+- Keep saved session state and cookies out of version control; they may grant account access.
+- Do not assume network observation captures every request, response body, WebSocket frame, or cached/service-worker event.
+- Network header redaction is name-based. Query-string secrets and other sensitive values may remain in recorded URLs or data.
+- Treat page content as untrusted. Calling `page.evaluate()` executes JavaScript in the page and must not be used as a safe sandbox for arbitrary code.
+- A crawler's scope and delay settings help control where and how quickly it visits pages; they do not establish authorization.
 
-1. `executable_path` on your `BrowserConfig`
-2. The `CHROMEBROWSE_CHROMIUM` environment variable
-3. `CHROMEBROWSE_BROWSERS_DIR` / `PLAYWRIGHT_BROWSERS_PATH`
-4. The project-local `./.browsers` folder (where `chromebrowse install` puts it)
-5. The Playwright user cache
-6. A system Chrome, Chromium, or Edge installation
-7. **Otherwise: download automatically** (once, ~185 MB)
-
-To see what it resolved to:
-
-```bash
-chromebrowse info
-```
----
+Read the [Security Review](docs/SECURITY_REVIEW.md) and [Security guide](docs/SECURITY.md) before deploying a browser service.
 
 ## Documentation
 
-Longer-form guides live in [`docs/`](docs/):
-
-| Document | Covers |
+| Document | Purpose |
 |---|---|
-| [USER_GUIDE.md](docs/USER_GUIDE.md) | Task-oriented walkthrough of every feature |
-| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Module layout, design principles, testing strategy |
-| [NETWORK.md](docs/NETWORK.md) | Network observation, filters, bounds, redaction |
-| [CRAWLING.md](docs/CRAWLING.md) | Crawler scope, queue, resume, and deliberate limits |
-| [SECURITY.md](docs/SECURITY.md) | Scope vs authorization, SSRF, credential handling |
-
----
+| [User Guide](docs/USER_GUIDE.md) | Step-by-step examples, API usage, sessions, configuration, CLI, troubleshooting, and integration |
+| [Architecture](docs/ARCHITECTURE.md) | Module relationships, design principles, and testing strategy |
+| [Network observation](docs/NETWORK.md) | Event types, filters, bounds, and redaction limitations |
+| [Crawling](docs/CRAWLING.md) | Scope, queue limits, URL normalization, resume, failure handling, and cancellation |
+| [Security](docs/SECURITY.md) | Authorization, SSRF considerations, and credential handling |
+| [Security Review](docs/SECURITY_REVIEW.md) | Deployment risks and recommended mitigations |
+| [Changelog](CHANGELOG.md) | Project changes and release notes |
+| [Issues](https://github.com/nksdev/chromebrowse/issues) | Bug reports and feature requests |
 
 ## Architecture
 
+The project separates the browser API from optional capabilities so the browser lifecycle and page behavior remain reusable:
+
+```text
+Browser / Page / Element
+    |
+    +-- Extraction       readable text, Markdown, links, metadata, tables
+    +-- Hooks            lifecycle extension points
+    +-- Network           bounded request/response/failure observation
+    +-- Crawl             browser-rendered crawl, scope, queue, resume
+    +-- Session           persistent browser state
+    +-- Configuration     browser discovery, installation, timeouts, policy
+    +-- CLI               commands and interactive REPL
+    +-- Exceptions        consistent error hierarchy
 ```
-src/chromebrowse/
-  __init__.py     public exports
-  browser.py      Browser, Page, Element - the engine
-  config.py       BrowserConfig, Chromium discovery and install
-  extract.py      in-browser JS extractors, HTML to text / Markdown
-  models.py       Link, PageContent, Snapshot
-  session.py      persistent sessions
-  cli.py          argparse CLI and interactive REPL
-  exceptions.py   error hierarchy
-```
 
-It is layered so you can extend it without touching the core:
+Key design principles:
 
-- **`Browser`** owns Playwright, the browser process, and the context.
-- **`Page`** wraps one tab; all extraction and interaction lives here.
-- **`Element`** wraps a Playwright locator with a friendlier API.
-- **`Session`** layers persistence on top of `Browser`.
-- **`extract.py`** is isolated - swap in your own parser freely.
+- **Compose rather than duplicate:** crawling uses the existing browser API.
+- **Add features without replacing the core:** optional capabilities live in focused modules.
+- **Keep extraction testable:** pure parsing and conversion helpers can be tested separately from browser execution.
+- **Bound long-running work:** network observations have a capped buffer, and crawling enforces page/depth limits.
+- **Make limitations explicit:** the network observer, crawler, and URL policy document their operating boundaries.
 
----
+For implementation details, see [Architecture](docs/ARCHITECTURE.md).
 
-## Development
+## Development and tests
 
-Create an environment and install the package in editable mode. This makes Python
-import the code from your local checkout, so tests exercise the source you are
-editing rather than a separately installed copy.
+Clone the repository and install the package in editable mode with development dependencies:
 
 ```bash
+git clone https://github.com/nksdev/chromebrowse.git
+cd chromebrowse
+
 python -m venv .venv
-source .venv/bin/activate          # Windows: .venv\\Scripts\\activate
+source .venv/bin/activate
+# Windows: .venv\Scripts\activate
+
 python -m pip install -e ".[dev]"
 ```
 
@@ -779,19 +608,16 @@ python -m pytest tests/ --ignore=tests/test_live.py -v
 
 ### Run the live browser tests
 
-The six live integration tests launch Chromium and access `https://example.com`.
-Install Chromium first, then enable the tests explicitly:
+Install Chromium and enable the live tests explicitly:
 
 ```bash
 chromebrowse install
 CHROMEBROWSE_LIVE=1 python -m pytest tests/test_live.py -v
 ```
 
-The live tests are skipped by default because they require a browser binary and
-network access. The CI workflow runs offline tests and live browser tests as
-separate jobs.
+Live tests require a browser binary and network access. The CI workflow also runs platform/Python test jobs and a distribution build/install smoke test. Check the current [CI workflow](.github/workflows/ci.yml) for the exact matrix.
 
-Runnable examples live in `examples/`:
+Runnable examples are in `examples/`, including:
 
 ```bash
 python examples/basic_usage.py
@@ -799,70 +625,29 @@ python examples/form_interaction.py
 python examples/scrape_links.py
 python examples/session_login.py
 ```
----
 
-## Publishing to PyPI
+## Publishing
 
-This repository ships `.github/workflows/publish.yml`, configured for PyPI
-[Trusted Publishing](https://docs.pypi.org/trusted-publishers/) - no API token
-is stored anywhere.
+The repository includes a GitHub Actions workflow for publishing distributions to PyPI with [Trusted Publishing](https://docs.pypi.org/trusted-publishers/), avoiding a long-lived PyPI API token in repository secrets.
 
-### One-time setup (do this first)
+Before publishing, configure the matching PyPI trusted publisher and the repository's `pypi` GitHub Actions environment as described in the workflow. Then create a release using the tag and version intended for that release. Verify the CI results and distribution metadata before publishing.
 
-1. Go to <https://pypi.org/manage/account/publishing/> and add a **pending
-   publisher**:
-   - **PyPI Project Name:** `chromebrowse`
-   - **Owner:** `nksdev`
-   - **Repository name:** `chromebrowse`
-   - **Workflow name:** `publish.yml`
-   - **Environment name:** `pypi`
-2. In the GitHub repo, create an environment named `pypi` under
-   **Settings -> Environments** (no secrets needed).
-
-### Publish a release
-
-1. On GitHub, go to **Releases -> Draft a new release**.
-2. Tag it `v0.1.0`, write notes, and click **Publish release**.
-3. The workflow builds the wheel and sdist and uploads them to PyPI.
-
-You can also run the **Publish** workflow manually from the Actions tab.
-
-### Manual alternative, with twine
+To build and check distributions locally:
 
 ```bash
-pip install build twine
+python -m pip install build twine
 python -m build
 python -m twine check dist/*
-
-# Test PyPI first - always a good idea
-python -m twine upload --repository testpypi dist/*
-pip install --index-url https://test.pypi.org/simple/ chromebrowse
-
-# Then the real thing
-python -m twine upload dist/*
 ```
 
-After either route, anyone can `pip install chromebrowse` and the PyPI
-badge at the top of this README will resolve.
-
----
-
-## Licensing
-
-chromebrowse is **MIT** licensed - free for commercial and closed-source use.
-
-It depends on [Playwright](https://playwright.dev/python/) (Apache-2.0), which
-drives Chromium (BSD-3-Clause). The binary Playwright downloads is "Chrome for
-Testing," distributed by Google for testing purposes.
-
-**No browser binary is bundled in this repository or in the PyPI package.** It
-is downloaded on demand, which keeps installs small and attribution clean.
-
-## Disclaimer
-
-Respect the terms of service and `robots.txt` of the sites you browse, and
-follow applicable law. You are responsible for how you use this tool.
+For a manual upload, configure credentials according to PyPI's current guidance and test the package on TestPyPI first. See [publish.yml](.github/workflows/publish.yml) and the official [Trusted Publishing documentation](https://docs.pypi.org/trusted-publishers/).
 
 ## License
 
-MIT - see [LICENSE](LICENSE).
+`chromebrowse` is licensed under the [MIT License](LICENSE), allowing use in commercial and closed-source projects subject to the license terms.
+
+It depends on [Playwright for Python](https://playwright.dev/python/) (Apache-2.0). Chromium/browser binaries are not bundled in this repository or in the package; a compatible browser is found locally or downloaded when required.
+
+## Disclaimer
+
+You are responsible for how you use this project. Use it only in ways that comply with applicable law, site terms, account permissions, and other relevant policies.
